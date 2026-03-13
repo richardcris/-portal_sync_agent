@@ -374,6 +374,8 @@ class SyncAgentApp(ctk.CTk):
         self.logo_wrap.pack(fill="x", padx=18, pady=(20, 12))
 
         self._logo_glow_phase = 0.0
+        self._logo_anim_frame = None
+        self.logo_label = None
         self.load_logo()
 
         self.app_name = ctk.CTkLabel(
@@ -576,63 +578,56 @@ class SyncAgentApp(ctk.CTk):
         self.create_log_card()
 
     def load_logo(self):
-        import math
-        LOGO_SIZE = 92
-        CANVAS_SIZE = 136
-        SIDEBAR_BG = "#0B0F15"
+        # Destroy previous widgets if reloaded
+        for attr in ("_logo_anim_frame",):
+            obj = getattr(self, attr, None)
+            if obj:
+                try:
+                    obj.destroy()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
 
-        if hasattr(self, "_logo_canvas"):
-            try:
-                self._logo_canvas.destroy()
-            except Exception:
-                pass
-
-        self._logo_canvas = tk.Canvas(
+        # Outer animated badge frame
+        self._logo_anim_frame = ctk.CTkFrame(
             self.logo_wrap,
-            width=CANVAS_SIZE, height=CANVAS_SIZE,
-            bg=SIDEBAR_BG,
-            highlightthickness=0
+            fg_color=self.bg_card,
+            corner_radius=14,
+            border_width=2,
+            border_color=self.accent,
         )
-        self._logo_canvas.pack(anchor="center", pady=(0, 8))
+        self._logo_anim_frame.pack(anchor="center", pady=(0, 8))
 
-        cx = cy = CANVAS_SIZE // 2
-        lr = LOGO_SIZE // 2
+        self.logo_label = ctk.CTkLabel(self._logo_anim_frame, text="", fg_color="transparent")
+        self.logo_label.pack(padx=16, pady=14)
 
-        self._glow_ring_outer = self._logo_canvas.create_oval(
-            cx - lr - 18, cy - lr - 18, cx + lr + 18, cy + lr + 18,
-            outline=SIDEBAR_BG, width=1, fill=""
-        )
-        self._glow_ring_inner = self._logo_canvas.create_oval(
-            cx - lr - 7, cy - lr - 7, cx + lr + 7, cy + lr + 7,
-            outline=SIDEBAR_BG, width=2, fill=""
-        )
-
-        logo_loaded = False
+        logo_size = (90, 58)
         logo_candidates = [
             resource_path("logo.png"),
             resource_path("logo.jpg"),
             resource_path("logo.jpeg"),
         ]
+        logo_loaded = False
         for logo_path in logo_candidates:
             try:
                 if os.path.exists(logo_path):
-                    img = Image.open(logo_path).convert("RGBA")
-                    img = img.resize((LOGO_SIZE, LOGO_SIZE), Image.Resampling.LANCZOS)
-                    mask = Image.new("L", (LOGO_SIZE, LOGO_SIZE), 0)
-                    ImageDraw.Draw(mask).ellipse((0, 0, LOGO_SIZE, LOGO_SIZE), fill=255)
-                    img.putalpha(mask)
-                    self._logo_photo = ImageTk.PhotoImage(img)
-                    self._logo_canvas.create_image(cx, cy, image=self._logo_photo)
+                    pil_img = Image.open(logo_path)
+                    self.logo_image = ctk.CTkImage(
+                        light_image=pil_img,
+                        dark_image=pil_img,
+                        size=logo_size
+                    )
+                    self.logo_label.configure(image=self.logo_image)
                     logo_loaded = True
                     break
             except Exception:
                 pass
 
         if not logo_loaded:
-            self._logo_canvas.create_text(
-                cx, cy, text="VX",
-                font=("Segoe UI", 32, "bold"),
-                fill=self.accent
+            self.logo_label.configure(
+                text="VX",
+                font=ctk.CTkFont(size=32, weight="bold"),
+                text_color=self.accent
             )
 
         self._animate_logo_glow()
@@ -642,28 +637,24 @@ class SyncAgentApp(ctk.CTk):
         try:
             if not self.winfo_exists():
                 return
-            if not hasattr(self, "_logo_canvas") or not self._logo_canvas.winfo_exists():
+            if not self._logo_anim_frame or not self._logo_anim_frame.winfo_exists():
                 return
         except Exception:
             return
 
-        intensity = 0.18 + 0.82 * (0.5 + 0.5 * math.sin(self._logo_glow_phase))
+        # Pulse border from dim teal to bright teal
+        t = 0.5 + 0.5 * math.sin(self._logo_glow_phase)
+        tr, tg, tb = 0x0E, 0xA5, 0xA0   # bright teal  #0EA5A0
+        dr, dg, db = 0x03, 0x28, 0x27   # dim teal
+        r = int(dr + (tr - dr) * t)
+        g = int(dg + (tg - dg) * t)
+        b = int(db + (tb - db) * t)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        self._logo_anim_frame.configure(border_color=color)
 
-        # Teal #0EA5A0 = (14, 165, 160), sidebar bg #0B0F15 = (11, 15, 21)
-        tr, tg, tb = 14, 165, 160
-        sr, sg, sb = 11, 15, 21
+        self._logo_glow_phase += 0.05
+        self.after(50, self._animate_logo_glow)
 
-        def blend(bg, fg, a):
-            return int(bg + (fg - bg) * a)
-
-        ic = f"#{blend(sr,tr,intensity):02x}{blend(sg,tg,intensity):02x}{blend(sb,tb,intensity):02x}"
-        oc = f"#{blend(sr,tr,intensity*0.4):02x}{blend(sg,tg,intensity*0.4):02x}{blend(sb,tb,intensity*0.4):02x}"
-
-        self._logo_canvas.itemconfig(self._glow_ring_inner, outline=ic)
-        self._logo_canvas.itemconfig(self._glow_ring_outer, outline=oc)
-
-        self._logo_glow_phase += 0.045
-        self.after(40, self._animate_logo_glow)
 
 
     def load_image_for_notice(self, size=(118, 118)):
