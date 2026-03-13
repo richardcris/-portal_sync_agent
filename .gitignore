@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+build/
+dist/
+public_update/
+
+*.spec
+*.log
+
+config.json
+
+.vscode/

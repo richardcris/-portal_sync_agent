@@ -1,0 +1,138 @@
+name: Release VEXPER Setup
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versao semantica (ex: 1.2.0)"
+        required: true
+      notes:
+        description: "Notas da versao"
+        required: false
+        default: "Atualizacao automatica publicada."
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve release metadata
+        id: meta
+        shell: powershell
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+            $notes = "${{ github.event.inputs.notes }}"
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+              $notes = "Atualizacao automatica publicada."
+            }
+          } else {
+            $version = "1.0.${{ github.run_number }}"
+            $notes = "Release automatica a partir do commit ${{ github.sha }}"
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "notes=$notes" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Install dependencies
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Set app version
+        shell: powershell
+        run: |
+          python scripts/set_version.py "${{ steps.meta.outputs.version }}"
+
+      - name: Build EXE
+        shell: powershell
+        run: |
+          .\build_exe.bat
+
+      - name: Build Setup
+        shell: powershell
+        run: |
+          .\build_setup.bat
+
+      - name: Prepare signing certificate
+        if: ${{ secrets.WIN_CERT_PFX_BASE64 != '' && secrets.WIN_CERT_PASSWORD != '' }}
+        id: cert
+        shell: powershell
+        env:
+          WIN_CERT_PFX_BASE64: ${{ secrets.WIN_CERT_PFX_BASE64 }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "vexper-signing-cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WIN_CERT_PFX_BASE64))
+          "path=$certPath" >> $env:GITHUB_OUTPUT
+
+      - name: Sign binaries
+        if: ${{ steps.cert.outputs.path != '' }}
+        shell: powershell
+        env:
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64\\signtool\.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            throw "signtool.exe não encontrado no runner."
+          }
+
+          & $signtool sign /f "${{ steps.cert.outputs.path }}" /p "$env:WIN_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\VEXPER-SISTEMAS.exe
+          & $signtool sign /f "${{ steps.cert.outputs.path }}" /p "$env:WIN_CERT_PASSWORD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\VEXPER-SISTEMAS-Setup.exe
+
+      - name: Generate SHA256 checksums
+        id: checksums
+        shell: powershell
+        run: |
+          $exeHash = (Get-FileHash dist\VEXPER-SISTEMAS.exe -Algorithm SHA256).Hash.ToLower()
+          $setupHash = (Get-FileHash dist\VEXPER-SISTEMAS-Setup.exe -Algorithm SHA256).Hash.ToLower()
+
+          @(
+            "$exeHash  VEXPER-SISTEMAS.exe"
+            "$setupHash  VEXPER-SISTEMAS-Setup.exe"
+          ) | Set-Content -Path dist\SHA256SUMS.txt -Encoding utf8
+
+          "setup_sha256=$setupHash" >> $env:GITHUB_OUTPUT
+
+      - name: Generate update manifest
+        shell: powershell
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/v$version/VEXPER-SISTEMAS-Setup.exe"
+          python scripts/generate_manifest.py "$version" "$downloadUrl" "${{ steps.meta.outputs.notes }}" "${{ steps.checksums.outputs.setup_sha256 }}"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: VEXPER SISTEMAS v${{ steps.meta.outputs.version }}
+          body: ${{ steps.meta.outputs.notes }}
+          files: |
+            dist/VEXPER-SISTEMAS.exe
+            dist/VEXPER-SISTEMAS-Setup.exe
+            dist/manifest.json
+            dist/SHA256SUMS.txt
