@@ -165,7 +165,7 @@ def show_startup_splash(duration_ms=2900):
     splash = tk.Tk()
     splash.title(APP_TITLE)
     splash.overrideredirect(True)
-    splash.configure(bg="#0B0E13")
+    splash.configure(bg="#0B0F15")
     splash.attributes("-topmost", True)
 
     width, height = 520, 320
@@ -175,10 +175,10 @@ def show_startup_splash(duration_ms=2900):
     y = int((screen_h - height) / 2)
     splash.geometry(f"{width}x{height}+{x}+{y}")
 
-    container = tk.Frame(splash, bg="#0B0E13")
+    container = tk.Frame(splash, bg="#0B0F15")
     container.pack(expand=True, fill="both", padx=24, pady=24)
 
-    logo_label = tk.Label(container, bg="#0B0E13")
+    logo_label = tk.Label(container, bg="#0B0F15")
     logo_label.pack(pady=(10, 10))
 
     logo_candidates = [
@@ -200,13 +200,13 @@ def show_startup_splash(duration_ms=2900):
             pass
 
     if not getattr(splash, "logo_photo", None):
-        logo_label.configure(text="VX", fg="#F3F6FB", bg="#0B0E13", font=("Segoe UI", 44, "bold"))
+        logo_label.configure(text="VX", fg="#E6EDF3", bg="#0B0F15", font=("Segoe UI", 44, "bold"))
 
     title = tk.Label(
         container,
         text="VEXPER SISTEMAS",
-        fg="#F3F6FB",
-        bg="#0B0E13",
+        fg="#E6EDF3",
+        bg="#0B0F15",
         font=("Segoe UI", 24, "bold")
     )
     title.pack()
@@ -214,8 +214,8 @@ def show_startup_splash(duration_ms=2900):
     subtitle = tk.Label(
         container,
         text="Carregando Sync Agent...",
-        fg="#A8B3C7",
-        bg="#0B0E13",
+        fg="#8B949E",
+        bg="#0B0F15",
         font=("Segoe UI", 11)
     )
     subtitle.pack(pady=(4, 16))
@@ -263,14 +263,14 @@ class SyncAgentApp(ctk.CTk):
         self.scan_total = 0
         self.scan_done = 0
 
-        self.bg_main = "#101114"
-        self.bg_card = "#181A1F"
-        self.bg_card_2 = "#20232A"
-        self.accent = "#1F6FEB"
-        self.accent_hover = "#1758B8"
-        self.text_main = "#F3F6FB"
-        self.text_soft = "#A8B3C7"
-        self.border = "#2B3140"
+        self.bg_main = "#0D1117"
+        self.bg_card = "#161B22"
+        self.bg_card_2 = "#21262D"
+        self.accent = "#0EA5A0"
+        self.accent_hover = "#0D9488"
+        self.text_main = "#E6EDF3"
+        self.text_soft = "#8B949E"
+        self.border = "#30363D"
         self.success_color = "#16A34A"
         self.error_color = "#DC2626"
         self.warning_color = "#F59E0B"
@@ -354,7 +354,7 @@ class SyncAgentApp(ctk.CTk):
         self.sidebar = ctk.CTkFrame(
             self.main_frame,
             width=260,
-            fg_color="#0C0E12",
+            fg_color="#0B0F15",
             corner_radius=0,
             border_width=1,
             border_color=self.border
@@ -373,9 +373,7 @@ class SyncAgentApp(ctk.CTk):
         self.logo_wrap = ctk.CTkFrame(self.sidebar_scroll, fg_color="transparent")
         self.logo_wrap.pack(fill="x", padx=18, pady=(20, 12))
 
-        self.logo_label = ctk.CTkLabel(self.logo_wrap, text="")
-        self.logo_label.pack(anchor="center", pady=(0, 8))
-
+        self._logo_glow_phase = 0.0
         self.load_logo()
 
         self.app_name = ctk.CTkLabel(
@@ -496,7 +494,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.sidebar_test = ctk.CTkButton(
             self.sidebar_scroll, text="Testar Conexão", command=self.test_upload,
-            fg_color=self.bg_card_2, hover_color="#2B3140", height=40
+            fg_color=self.bg_card_2, hover_color="#30363D", height=40
         )
         self.sidebar_test.pack(fill="x", padx=18, pady=6)
 
@@ -514,13 +512,13 @@ class SyncAgentApp(ctk.CTk):
 
         self.sidebar_existing = ctk.CTkButton(
             self.sidebar_scroll, text="Processar Existentes", command=self.process_existing_files,
-            fg_color=self.bg_card_2, hover_color="#2B3140", height=40
+            fg_color=self.bg_card_2, hover_color="#30363D", height=40
         )
         self.sidebar_existing.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_update = ctk.CTkButton(
             self.sidebar_scroll, text="Verificar Atualização", command=self.check_for_updates,
-            fg_color=self.bg_card_2, hover_color="#2B3140", height=40
+            fg_color=self.bg_card_2, hover_color="#30363D", height=40
         )
         self.sidebar_update.pack(fill="x", padx=18, pady=6)
 
@@ -578,7 +576,38 @@ class SyncAgentApp(ctk.CTk):
         self.create_log_card()
 
     def load_logo(self):
-        logo_size = (110, 110)
+        import math
+        LOGO_SIZE = 92
+        CANVAS_SIZE = 136
+        SIDEBAR_BG = "#0B0F15"
+
+        if hasattr(self, "_logo_canvas"):
+            try:
+                self._logo_canvas.destroy()
+            except Exception:
+                pass
+
+        self._logo_canvas = tk.Canvas(
+            self.logo_wrap,
+            width=CANVAS_SIZE, height=CANVAS_SIZE,
+            bg=SIDEBAR_BG,
+            highlightthickness=0
+        )
+        self._logo_canvas.pack(anchor="center", pady=(0, 8))
+
+        cx = cy = CANVAS_SIZE // 2
+        lr = LOGO_SIZE // 2
+
+        self._glow_ring_outer = self._logo_canvas.create_oval(
+            cx - lr - 18, cy - lr - 18, cx + lr + 18, cy + lr + 18,
+            outline=SIDEBAR_BG, width=1, fill=""
+        )
+        self._glow_ring_inner = self._logo_canvas.create_oval(
+            cx - lr - 7, cy - lr - 7, cx + lr + 7, cy + lr + 7,
+            outline=SIDEBAR_BG, width=2, fill=""
+        )
+
+        logo_loaded = False
         logo_candidates = [
             resource_path("logo.png"),
             resource_path("logo.jpg"),
@@ -587,17 +616,55 @@ class SyncAgentApp(ctk.CTk):
         for logo_path in logo_candidates:
             try:
                 if os.path.exists(logo_path):
-                    self.logo_image = ctk.CTkImage(
-                        light_image=Image.open(logo_path),
-                        dark_image=Image.open(logo_path),
-                        size=logo_size
-                    )
-                    self.logo_label.configure(image=self.logo_image)
-                    return
+                    img = Image.open(logo_path).convert("RGBA")
+                    img = img.resize((LOGO_SIZE, LOGO_SIZE), Image.Resampling.LANCZOS)
+                    mask = Image.new("L", (LOGO_SIZE, LOGO_SIZE), 0)
+                    ImageDraw.Draw(mask).ellipse((0, 0, LOGO_SIZE, LOGO_SIZE), fill=255)
+                    img.putalpha(mask)
+                    self._logo_photo = ImageTk.PhotoImage(img)
+                    self._logo_canvas.create_image(cx, cy, image=self._logo_photo)
+                    logo_loaded = True
+                    break
             except Exception:
                 pass
 
-        self.logo_label.configure(text="VX", font=ctk.CTkFont(size=42, weight="bold"))
+        if not logo_loaded:
+            self._logo_canvas.create_text(
+                cx, cy, text="VX",
+                font=("Segoe UI", 32, "bold"),
+                fill=self.accent
+            )
+
+        self._animate_logo_glow()
+
+    def _animate_logo_glow(self):
+        import math
+        try:
+            if not self.winfo_exists():
+                return
+            if not hasattr(self, "_logo_canvas") or not self._logo_canvas.winfo_exists():
+                return
+        except Exception:
+            return
+
+        intensity = 0.18 + 0.82 * (0.5 + 0.5 * math.sin(self._logo_glow_phase))
+
+        # Teal #0EA5A0 = (14, 165, 160), sidebar bg #0B0F15 = (11, 15, 21)
+        tr, tg, tb = 14, 165, 160
+        sr, sg, sb = 11, 15, 21
+
+        def blend(bg, fg, a):
+            return int(bg + (fg - bg) * a)
+
+        ic = f"#{blend(sr,tr,intensity):02x}{blend(sg,tg,intensity):02x}{blend(sb,tb,intensity):02x}"
+        oc = f"#{blend(sr,tr,intensity*0.4):02x}{blend(sg,tg,intensity*0.4):02x}{blend(sb,tb,intensity*0.4):02x}"
+
+        self._logo_canvas.itemconfig(self._glow_ring_inner, outline=ic)
+        self._logo_canvas.itemconfig(self._glow_ring_outer, outline=oc)
+
+        self._logo_glow_phase += 0.045
+        self.after(40, self._animate_logo_glow)
+
 
     def load_image_for_notice(self, size=(118, 118)):
         logo_candidates = [
@@ -877,7 +944,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.test_btn = ctk.CTkButton(
             self.buttons_frame, text="Testar Upload", command=self.test_upload,
-            fg_color=self.bg_card_2, hover_color="#2B3140", width=140
+            fg_color=self.bg_card_2, hover_color="#30363D", width=140
         )
         self.test_btn.grid(row=0, column=1, padx=(0, 10), pady=6)
 
@@ -895,7 +962,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.process_existing_btn = ctk.CTkButton(
             self.buttons_frame, text="Processar Existentes", command=self.process_existing_files,
-            fg_color=self.bg_card_2, hover_color="#2B3140", width=180
+            fg_color=self.bg_card_2, hover_color="#30363D", width=180
         )
         self.process_existing_btn.grid(row=0, column=4, padx=(0, 10), pady=6)
 
@@ -968,20 +1035,20 @@ class SyncAgentApp(ctk.CTk):
 
         style.configure(
             "Treeview",
-            background="#12151B",
-            foreground="#E5E7EB",
-            fieldbackground="#12151B",
+            background="#0D1117",
+            foreground="#E6EDF3",
+            fieldbackground="#0D1117",
             rowheight=28,
-            bordercolor="#2B3140",
+            bordercolor="#30363D",
             borderwidth=0
         )
         style.configure(
             "Treeview.Heading",
-            background="#1C2230",
-            foreground="#F3F6FB",
+            background="#161B22",
+            foreground="#E6EDF3",
             relief="flat"
         )
-        style.map("Treeview", background=[("selected", "#1F6FEB")])
+        style.map("Treeview", background=[("selected", "#0EA5A0")])
 
         columns = ("datahora", "arquivo", "empresa", "status", "http", "mensagem")
         self.tree = ttk.Treeview(self.table_wrap, columns=columns, show="headings", height=10)
