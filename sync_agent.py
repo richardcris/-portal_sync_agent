@@ -1276,7 +1276,12 @@ class SyncAgentApp(ctk.CTk):
                 bat.write("  timeout /t 1 /nobreak >nul\n")
                 bat.write("  goto waitloop\n")
                 bat.write(")\n")
-                bat.write(f"start \"\" \"{target_path}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-\n")
+                bat.write("timeout /t 1 /nobreak >nul\n")
+                bat.write("taskkill /IM \"VEXPER-SISTEMAS.exe\" /F >nul 2>&1\n")
+                bat.write("timeout /t 1 /nobreak >nul\n")
+                bat.write(
+                    f"start \"\" \"{target_path}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS\n"
+                )
 
             subprocess.Popen(["cmd", "/c", updater_bat], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             self.log("Instalador agendado para iniciar após fechamento do aplicativo.")
