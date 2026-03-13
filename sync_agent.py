@@ -15,7 +15,7 @@ import tkinter as tk
 
 import customtkinter as ctk
 import requests
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageDraw, ImageTk, ImageSequence
 
 try:
     import pystray
@@ -500,11 +500,7 @@ class SyncAgentApp(ctk.CTk):
         )
         self.sidebar_test.pack(fill="x", padx=18, pady=6)
 
-        self.sidebar_start = ctk.CTkButton(
-            self.sidebar_scroll, text="Iniciar Monitoramento", command=self.start_monitoring,
-            fg_color=self.success_color, hover_color="#15803D", height=40
-        )
-        self.sidebar_start.pack(fill="x", padx=18, pady=6)
+        self.create_sidebar_start_control()
 
         self.sidebar_stop = ctk.CTkButton(
             self.sidebar_scroll, text="Parar Monitoramento", command=self.stop_monitoring,
@@ -534,6 +530,102 @@ class SyncAgentApp(ctk.CTk):
             font=ctk.CTkFont(size=11)
         )
         self.footer_label.pack(anchor="w", padx=18, pady=(0, 18))
+
+    def create_sidebar_start_control(self):
+        self.sidebar_start_frame = ctk.CTkFrame(
+            self.sidebar_scroll,
+            fg_color=self.bg_card_2,
+            corner_radius=12,
+            border_width=1,
+            border_color=self.border,
+        )
+        self.sidebar_start_frame.pack(fill="x", padx=18, pady=6)
+
+        self.sidebar_start_image_label = tk.Label(
+            self.sidebar_start_frame,
+            bg=self.bg_card_2,
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        self.sidebar_start_image_label.pack(pady=(8, 2))
+
+        self.sidebar_start_text_label = ctk.CTkLabel(
+            self.sidebar_start_frame,
+            text="Clique no ícone para iniciar",
+            text_color=self.text_main,
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        self.sidebar_start_text_label.pack(pady=(0, 8))
+
+        self.sidebar_start_image_label.bind("<Button-1>", lambda _e: self.start_monitoring())
+        self.sidebar_start_text_label.bind("<Button-1>", lambda _e: self.start_monitoring())
+        self.sidebar_start_frame.bind("<Button-1>", lambda _e: self.start_monitoring())
+
+        self.sidebar_start = self.sidebar_start_frame
+        self._sidebar_start_frames = []
+        self._sidebar_start_frame_index = 0
+        self._sidebar_start_anim_job = None
+        self.load_sidebar_start_visual()
+
+    def load_sidebar_start_visual(self):
+        asset_candidates = [
+            resource_path("start_monitor.gif"),
+            resource_path("rocket.gif"),
+            resource_path("1.gif"),
+            resource_path("1.png"),
+            resource_path("logo.png"),
+        ]
+
+        for asset_path in asset_candidates:
+            try:
+                if not os.path.exists(asset_path):
+                    continue
+
+                ext = os.path.splitext(asset_path)[1].lower()
+                if ext == ".gif":
+                    gif = Image.open(asset_path)
+                    frames = []
+                    for frame in ImageSequence.Iterator(gif):
+                        frame_rgba = frame.convert("RGBA")
+                        frame_rgba.thumbnail((120, 120), Image.Resampling.LANCZOS)
+                        frames.append(ImageTk.PhotoImage(frame_rgba))
+
+                    if frames:
+                        self._sidebar_start_frames = frames
+                        self._sidebar_start_frame_index = 0
+                        self.sidebar_start_image_label.configure(image=frames[0], text="")
+                        self.animate_sidebar_start_visual()
+                        return
+
+                image = Image.open(asset_path).convert("RGBA")
+                image.thumbnail((120, 120), Image.Resampling.LANCZOS)
+                self._sidebar_start_single_image = ImageTk.PhotoImage(image)
+                self.sidebar_start_image_label.configure(image=self._sidebar_start_single_image, text="")
+                return
+            except Exception:
+                pass
+
+        self.sidebar_start_image_label.configure(
+            text="INICIAR",
+            fg=self.accent,
+            bg=self.bg_card_2,
+            font=("Segoe UI", 14, "bold"),
+        )
+
+    def animate_sidebar_start_visual(self):
+        if not self._sidebar_start_frames:
+            return
+        try:
+            if not self.winfo_exists() or not self.sidebar_start_image_label.winfo_exists():
+                return
+        except Exception:
+            return
+
+        frame = self._sidebar_start_frames[self._sidebar_start_frame_index]
+        self.sidebar_start_image_label.configure(image=frame, text="")
+        self._sidebar_start_frame_index = (self._sidebar_start_frame_index + 1) % len(self._sidebar_start_frames)
+        self._sidebar_start_anim_job = self.after(90, self.animate_sidebar_start_visual)
 
     def create_content_area(self):
         self.content = ctk.CTkFrame(self.main_frame, fg_color=self.bg_main, corner_radius=0)
