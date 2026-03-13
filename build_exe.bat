@@ -11,7 +11,6 @@ python -m PyInstaller --clean --noconfirm --onefile --windowed ^
 --name VEXPER-SISTEMAS ^
 --icon=icon.ico ^
 --add-data "logo.png;." ^
---add-data "foguete.gif;." ^
 --add-data "1.png;." ^
 --add-data "icon.ico;." ^
 --add-data "icon.png;." ^
