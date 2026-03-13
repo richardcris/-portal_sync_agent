@@ -10,7 +10,7 @@
     "sent_folder": "enviados",
     "error_folder": "erros",
     "scan_interval": "15",
-    "update_manifest_url": "https://github.com/SEU_USUARIO/SEU_REPO/releases/latest/download/manifest.json",
+    "update_manifest_url": "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json",
     "auto_update_enabled": true,
     "move_sent_files": true,
     "monitor_subfolders": true,
