@@ -18,7 +18,14 @@ if "%ISCC_PATH%"=="" (
     exit /b 1
 )
 
-"%ISCC_PATH%" installer.iss
+set "APP_VERSION="
+for /f "tokens=2 delims==" %%i in ('findstr /B /C:"APP_VERSION" sync_agent.py') do set "APP_VERSION=%%i"
+set "APP_VERSION=%APP_VERSION: =%"
+set "APP_VERSION=%APP_VERSION:"=%"
+if "%APP_VERSION%"=="" set "APP_VERSION=1.0.0"
+
+echo Usando AppVersion: %APP_VERSION%
+"%ISCC_PATH%" /DMyAppVersion=%APP_VERSION% installer.iss
 if errorlevel 1 (
     echo Falha ao gerar instalador.
     exit /b 1

@@ -1,6 +1,8 @@
 ; Inno Setup script for VEXPER SISTEMAS Sync Agent
 #define MyAppName "VEXPER SISTEMAS - Sync Agent"
+#ifndef MyAppVersion
 #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "VEXPER SISTEMAS"
 #define MyAppExeName "VEXPER-SISTEMAS.exe"
 

@@ -127,6 +127,13 @@ def get_runtime_build_id():
         return datetime.now().strftime("%Y%m%d%H%M")
 
 
+def get_user_update_dir():
+    base_dir = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    update_dir = os.path.join(base_dir, "VEXPER-SISTEMAS", "updates")
+    os.makedirs(update_dir, exist_ok=True)
+    return update_dir
+
+
 def show_startup_splash(duration_ms=2900):
     splash = tk.Tk()
     splash.title(APP_TITLE)
@@ -202,6 +209,10 @@ class SyncAgentApp(ctk.CTk):
         self.runtime_version_label = f"{APP_VERSION} ({self.runtime_build_id})"
         self.last_seen_build_id = ""
         self.auto_update_enabled = AUTO_UPDATE_ON_START
+        self.update_progress_window = None
+        self.update_progress_label = None
+        self.update_progress_bar = None
+        self.update_progress_percent = None
 
         self.try_set_app_user_model_id()
 
@@ -682,6 +693,81 @@ class SyncAgentApp(ctk.CTk):
             daemon=True,
         ).start()
 
+    def show_update_progress_window(self, message="Baixando atualização..."):
+        if self.update_progress_window and self.update_progress_window.winfo_exists():
+            self.update_progress_window.lift()
+            if self.update_progress_label:
+                self.update_progress_label.configure(text=message)
+            return
+
+        win = ctk.CTkToplevel(self)
+        win.title("Atualizando")
+        win.geometry("500x260")
+        win.resizable(False, False)
+        win.transient(self)
+        win.grab_set()
+        win.configure(fg_color=self.bg_card)
+        win.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        box = ctk.CTkFrame(win, fg_color="transparent")
+        box.pack(fill="both", expand=True, padx=20, pady=20)
+
+        logo = ctk.CTkLabel(box, text="")
+        logo.pack(pady=(0, 10))
+
+        notice_logo = self.load_image_for_notice(size=(90, 90))
+        if notice_logo:
+            win.logo_image = notice_logo
+            logo.configure(image=win.logo_image)
+        else:
+            logo.configure(text="VX", font=ctk.CTkFont(size=32, weight="bold"))
+
+        title = ctk.CTkLabel(box, text="Atualizando aplicativo", font=ctk.CTkFont(size=22, weight="bold"))
+        title.pack(pady=(0, 8))
+
+        self.update_progress_label = ctk.CTkLabel(box, text=message, text_color=self.text_soft)
+        self.update_progress_label.pack(pady=(0, 8))
+
+        self.update_progress_bar = ctk.CTkProgressBar(box, height=20)
+        self.update_progress_bar.pack(fill="x", padx=10, pady=(0, 6))
+        self.update_progress_bar.set(0)
+
+        self.update_progress_percent = ctk.CTkLabel(box, text="0%", font=ctk.CTkFont(size=13, weight="bold"))
+        self.update_progress_percent.pack()
+
+        hint = ctk.CTkLabel(
+            box,
+            text="Aguarde, a versão antiga será substituída automaticamente.",
+            text_color=self.text_soft,
+            font=ctk.CTkFont(size=11),
+        )
+        hint.pack(pady=(10, 0))
+
+        self.update_progress_window = win
+
+    def set_update_progress(self, percent, message):
+        if self.update_progress_window is None or not self.update_progress_window.winfo_exists():
+            return
+
+        value = max(0.0, min(1.0, float(percent)))
+        if self.update_progress_bar:
+            self.update_progress_bar.set(value)
+        if self.update_progress_percent:
+            self.update_progress_percent.configure(text=f"{int(value * 100)}%")
+        if self.update_progress_label:
+            self.update_progress_label.configure(text=message)
+
+    def close_update_progress_window(self):
+        try:
+            if self.update_progress_window and self.update_progress_window.winfo_exists():
+                self.update_progress_window.destroy()
+        except Exception:
+            pass
+        self.update_progress_window = None
+        self.update_progress_label = None
+        self.update_progress_bar = None
+        self.update_progress_percent = None
+
     def create_config_card(self):
         self.config_card = ctk.CTkFrame(
             self.scroll_frame,
@@ -1147,30 +1233,53 @@ class SyncAgentApp(ctk.CTk):
 
     def download_and_launch_update_installer(self, download_url, latest_version, silent=False):
         try:
-            os.makedirs(os.path.join(app_dir(), "updates"), exist_ok=True)
+            updates_dir = get_user_update_dir()
 
             url_path = urlsplit(download_url).path
             file_name = os.path.basename(url_path) or f"VEXPER-SISTEMAS-Setup-{latest_version}.exe"
             if not file_name.lower().endswith(".exe"):
                 file_name += ".exe"
 
-            target_path = os.path.join(app_dir(), "updates", file_name)
+            target_path = os.path.join(updates_dir, file_name)
             temp_fd, temp_path = tempfile.mkstemp(prefix="vexper_update_", suffix=".exe")
             os.close(temp_fd)
+
+            self.ui(self.show_update_progress_window, "Baixando atualização...")
 
             self.log(f"Baixando atualização automática: {download_url}")
             with requests.get(download_url, stream=True, timeout=120) as r:
                 r.raise_for_status()
+                total_size = int(r.headers.get("content-length", "0") or "0")
+                downloaded = 0
                 with open(temp_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=1024 * 256):
                         if chunk:
                             f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                pct = min(0.9, (downloaded / total_size) * 0.9)
+                                self.ui(self.set_update_progress, pct, "Baixando atualização...")
 
             shutil.move(temp_path, target_path)
             self.log(f"Atualização baixada em: {target_path}")
 
-            subprocess.Popen([target_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"])
-            self.log("Instalador iniciado em modo silencioso.")
+            self.ui(self.set_update_progress, 0.95, "Preparando instalação...")
+
+            pid = os.getpid()
+            updater_bat = os.path.join(tempfile.gettempdir(), f"vexper_updater_{pid}.bat")
+            with open(updater_bat, "w", encoding="utf-8") as bat:
+                bat.write("@echo off\n")
+                bat.write(f"set PID={pid}\n")
+                bat.write(":waitloop\n")
+                bat.write("tasklist /FI \"PID eq %PID%\" | find \"%PID%\" >nul\n")
+                bat.write("if not errorlevel 1 (\n")
+                bat.write("  timeout /t 1 /nobreak >nul\n")
+                bat.write("  goto waitloop\n")
+                bat.write(")\n")
+                bat.write(f"start \"\" \"{target_path}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-\n")
+
+            subprocess.Popen(["cmd", "/c", updater_bat], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            self.log("Instalador agendado para iniciar após fechamento do aplicativo.")
 
             if not silent:
                 messagebox.showinfo(
@@ -1178,9 +1287,11 @@ class SyncAgentApp(ctk.CTk):
                     "Atualização iniciada em segundo plano. O aplicativo será fechado para concluir."
                 )
 
-            self.after(1000, self.destroy)
+            self.ui(self.set_update_progress, 1.0, "Instalando nova versão...")
+            self.after(700, self.destroy)
         except Exception as e:
             self.log(f"Erro ao baixar/instalar atualização automática: {e}")
+            self.ui(self.close_update_progress_window)
             if not silent:
                 messagebox.showerror("Atualização", f"Falha ao aplicar atualização automática:\n{e}")
 
@@ -1221,11 +1332,16 @@ class SyncAgentApp(ctk.CTk):
                     return
 
                 if download_url:
-                    msg += "Deseja abrir o link de download agora?"
+                    msg += "Deseja baixar e instalar automaticamente agora?"
                     if not silent:
-                        open_link = messagebox.askyesno("Atualização disponível", msg)
-                        if open_link:
-                            webbrowser.open(download_url)
+                        install_now = messagebox.askyesno("Atualização disponível", msg)
+                        if install_now:
+                            threading.Thread(
+                                target=self.download_and_launch_update_installer,
+                                args=(download_url, latest_version),
+                                kwargs={"silent": False},
+                                daemon=True,
+                            ).start()
                     else:
                         self.log("Atualização disponível, mas não foi possível auto-instalar neste modo.")
                 else:
