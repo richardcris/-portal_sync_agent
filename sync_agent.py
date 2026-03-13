@@ -906,6 +906,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.folder1_entry = self.add_entry_with_button("Pasta 1", lambda: self.select_folder(self.folder1_entry))
         self.folder2_entry = self.add_entry_with_button("Pasta 2", lambda: self.select_folder(self.folder2_entry))
+        self.folder3_entry = self.add_entry_with_button("Pasta 3", lambda: self.select_folder(self.folder3_entry))
         self.api_base_entry = self.add_entry("URL base da API")
         self.upload_endpoint_entry = self.add_entry("Endpoint de upload")
         self.api_token_entry = self.add_entry("Token da API", show="*")
@@ -1274,6 +1275,7 @@ class SyncAgentApp(ctk.CTk):
         return {
             "folder_1": self.folder1_entry.get().strip(),
             "folder_2": self.folder2_entry.get().strip(),
+            "folder_3": self.folder3_entry.get().strip(),
             "api_base_url": FIXED_API_BASE_URL,
             "upload_endpoint": self.upload_endpoint_entry.get().strip(),
             "api_token": self.api_token_entry.get().strip(),
@@ -1342,6 +1344,7 @@ class SyncAgentApp(ctk.CTk):
 
             self.set_entry(self.folder1_entry, config.get("folder_1", ""))
             self.set_entry(self.folder2_entry, config.get("folder_2", ""))
+            self.set_entry(self.folder3_entry, config.get("folder_3", ""))
             self.set_entry(self.api_base_entry, FIXED_API_BASE_URL)
             self.set_entry(self.upload_endpoint_entry, config.get("upload_endpoint", "/receiveDocument"))
             self.set_entry(self.api_token_entry, config.get("api_token", ""))
@@ -1685,12 +1688,15 @@ class SyncAgentApp(ctk.CTk):
         folders = []
         folder1 = self.folder1_entry.get().strip()
         folder2 = self.folder2_entry.get().strip()
+        folder3 = self.folder3_entry.get().strip()
         monitor_subfolders = self.monitor_subfolders_var.get()
 
         if folder1:
             folders.append(folder1)
         if folder2:
             folders.append(folder2)
+        if folder3:
+            folders.append(folder3)
 
         valid_files = []
 
