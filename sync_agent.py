@@ -88,7 +88,7 @@ def extract_update_info(payload):
         payload = payload[0]
 
     if not isinstance(payload, dict):
-        return "", "", ""
+        return "", "", "", ""
 
     source = payload.get("data") if isinstance(payload.get("data"), dict) else payload
 
@@ -115,7 +115,14 @@ def extract_update_info(payload):
         or ""
     ).strip()
 
-    return latest_version, download_url, notes
+    setup_sha256 = str(
+        source.get("setup_sha256")
+        or source.get("sha256")
+        or source.get("installer_sha256")
+        or ""
+    ).strip().lower()
+
+    return latest_version, download_url, notes, setup_sha256
 
 
 def get_runtime_build_id():
@@ -235,6 +242,7 @@ class SyncAgentApp(ctk.CTk):
         self.runtime_build_id = get_runtime_build_id()
         self.runtime_version_label = f"{APP_VERSION} ({self.runtime_build_id})"
         self.last_seen_build_id = ""
+        self.last_applied_setup_sha256 = ""
         self.auto_update_enabled = AUTO_UPDATE_ON_START
         self.update_progress_window = None
         self.update_progress_label = None
@@ -1238,6 +1246,7 @@ class SyncAgentApp(ctk.CTk):
             "scan_interval": self.interval_entry.get().strip() or "15",
             "update_manifest_url": self.update_manifest_url_entry.get().strip(),
             "last_seen_build_id": self.last_seen_build_id,
+            "last_applied_setup_sha256": self.last_applied_setup_sha256,
             "auto_update_enabled": self.auto_update_enabled,
             "move_sent_files": self.move_sent_var.get(),
             "monitor_subfolders": self.monitor_subfolders_var.get(),
@@ -1245,6 +1254,24 @@ class SyncAgentApp(ctk.CTk):
             "auto_start_windows": self.auto_start_windows_var.get(),
             "minimize_to_tray": self.minimize_to_tray_var.get()
         }
+
+    def persist_update_hash_state(self):
+        try:
+            config_path = get_config_read_path()
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                if not isinstance(config, dict):
+                    config = self.get_config()
+            else:
+                config = self.get_config()
+
+            config["last_applied_setup_sha256"] = self.last_applied_setup_sha256
+
+            with open(get_primary_config_path(), "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            self.log(f"Aviso: não foi possível persistir hash da atualização: {e}")
 
     def save_config(self):
         try:
@@ -1287,6 +1314,7 @@ class SyncAgentApp(ctk.CTk):
             self.set_entry(self.interval_entry, str(config.get("scan_interval", "15")))
             self.set_entry(self.update_manifest_url_entry, config.get("update_manifest_url", ""))
             self.last_seen_build_id = str(config.get("last_seen_build_id", "")).strip()
+            self.last_applied_setup_sha256 = str(config.get("last_applied_setup_sha256", "")).strip().lower()
             self.auto_update_enabled = normalize_bool(config.get("auto_update_enabled", AUTO_UPDATE_ON_START), AUTO_UPDATE_ON_START)
 
             self.move_sent_var.set(normalize_bool(config.get("move_sent_files", True), True))
@@ -1309,6 +1337,7 @@ class SyncAgentApp(ctk.CTk):
         self.set_entry(self.error_folder_entry, "erros")
         self.set_entry(self.interval_entry, "15")
         self.set_entry(self.update_manifest_url_entry, "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json")
+        self.last_applied_setup_sha256 = ""
         self.auto_update_enabled = AUTO_UPDATE_ON_START
         self.move_sent_var.set(True)
         self.monitor_subfolders_var.set(True)
@@ -1316,7 +1345,7 @@ class SyncAgentApp(ctk.CTk):
         self.auto_start_windows_var.set(False)
         self.minimize_to_tray_var.set(True)
 
-    def download_and_launch_update_installer(self, download_url, latest_version, silent=False):
+    def download_and_launch_update_installer(self, download_url, latest_version, silent=False, setup_sha256=""):
         try:
             updates_dir = get_user_update_dir()
 
@@ -1371,6 +1400,10 @@ class SyncAgentApp(ctk.CTk):
             subprocess.Popen(["cmd", "/c", updater_bat], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             self.log("Instalador agendado para iniciar após fechamento do aplicativo.")
 
+            if setup_sha256:
+                self.last_applied_setup_sha256 = str(setup_sha256).strip().lower()
+                self.persist_update_hash_state()
+
             if not silent:
                 messagebox.showinfo(
                     "Atualização",
@@ -1398,7 +1431,7 @@ class SyncAgentApp(ctk.CTk):
             response.raise_for_status()
             payload = response.json()
 
-            latest_version, download_url, notes = extract_update_info(payload)
+            latest_version, download_url, notes, setup_sha256 = extract_update_info(payload)
 
             if not latest_version:
                 if not silent:
@@ -1407,18 +1440,22 @@ class SyncAgentApp(ctk.CTk):
 
             current_tuple = normalize_version(APP_VERSION)
             latest_tuple = normalize_version(latest_version)
+            known_hash = str(self.last_applied_setup_sha256 or "").strip().lower()
+            hash_changed = bool(setup_sha256) and setup_sha256 != known_hash
 
-            if latest_tuple > current_tuple:
+            if latest_tuple > current_tuple or (latest_tuple == current_tuple and hash_changed):
                 msg = (
                     f"Nova versão disponível: {latest_version}\n"
                     f"Versão atual: {APP_VERSION}\n\n"
                 )
+                if latest_tuple == current_tuple and hash_changed:
+                    msg += "Detectamos mudança no pacote da release (SHA atualizado).\n\n"
                 if notes:
                     msg += f"Novidades:\n{notes}\n\n"
 
                 if auto_install and download_url and getattr(sys, "frozen", False):
                     self.log(f"Nova versão detectada ({latest_version}). Iniciando atualização automática.")
-                    self.download_and_launch_update_installer(download_url, latest_version, silent=True)
+                    self.download_and_launch_update_installer(download_url, latest_version, silent=True, setup_sha256=setup_sha256)
                     return
 
                 if download_url:
@@ -1429,7 +1466,7 @@ class SyncAgentApp(ctk.CTk):
                             threading.Thread(
                                 target=self.download_and_launch_update_installer,
                                 args=(download_url, latest_version),
-                                kwargs={"silent": False},
+                                kwargs={"silent": False, "setup_sha256": setup_sha256},
                                 daemon=True,
                             ).start()
                     else:
