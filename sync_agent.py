@@ -134,6 +134,33 @@ def get_user_update_dir():
     return update_dir
 
 
+def get_user_config_dir():
+    base_dir = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    config_dir = os.path.join(base_dir, "VEXPER-SISTEMAS")
+    os.makedirs(config_dir, exist_ok=True)
+    return config_dir
+
+
+def get_primary_config_path():
+    return os.path.join(get_user_config_dir(), CONFIG_FILE)
+
+
+def get_legacy_config_path():
+    return os.path.join(app_dir(), CONFIG_FILE)
+
+
+def get_config_read_path():
+    primary = get_primary_config_path()
+    if os.path.exists(primary):
+        return primary
+
+    legacy = get_legacy_config_path()
+    if os.path.exists(legacy):
+        return legacy
+
+    return primary
+
+
 def show_startup_splash(duration_ms=2900):
     splash = tk.Tk()
     splash.title(APP_TITLE)
@@ -590,7 +617,7 @@ class SyncAgentApp(ctk.CTk):
 
     def persist_runtime_version_state(self):
         try:
-            config_path = os.path.join(app_dir(), CONFIG_FILE)
+            config_path = get_config_read_path()
             if os.path.exists(config_path):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
@@ -602,7 +629,7 @@ class SyncAgentApp(ctk.CTk):
             config["last_seen_build_id"] = self.runtime_build_id
             config["last_seen_version"] = APP_VERSION
 
-            with open(config_path, "w", encoding="utf-8") as f:
+            with open(get_primary_config_path(), "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
 
             self.last_seen_build_id = self.runtime_build_id
@@ -1164,7 +1191,7 @@ class SyncAgentApp(ctk.CTk):
     def save_config(self):
         try:
             config = self.get_config()
-            config_path = os.path.join(app_dir(), CONFIG_FILE)
+            config_path = get_primary_config_path()
 
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
@@ -1178,7 +1205,7 @@ class SyncAgentApp(ctk.CTk):
             messagebox.showerror("Erro", f"Falha ao salvar configuração:\n{e}")
 
     def load_config(self):
-        config_path = os.path.join(app_dir(), CONFIG_FILE)
+        config_path = get_config_read_path()
 
         if not os.path.exists(config_path):
             self.log("config.json não encontrado. Usando valores padrão.")
