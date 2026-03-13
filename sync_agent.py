@@ -32,6 +32,7 @@ APP_VERSION = "1.0.0"
 AUTO_UPDATE_ON_START = True
 FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
 ENABLE_CONSOLE_LOG = False
+ENABLE_SIDEBAR_LOGO_ANIMATION = False
 LOGO_ANIMATION_INTERVAL_MS = 140
 WINDOW_MOVE_PAUSE_SECONDS = 0.35
 APP_CHANGELOG = [
@@ -298,7 +299,8 @@ class SyncAgentApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
 
         self.create_ui()
-        self.bind("<Configure>", self._on_window_configure)
+        if ENABLE_SIDEBAR_LOGO_ANIMATION:
+            self.bind("<Configure>", self._on_window_configure)
         self.after(150, self.try_set_window_icon)
         self.load_config()
         self.update_company_status()
@@ -646,7 +648,10 @@ class SyncAgentApp(ctk.CTk):
                 text_color=self.accent
             )
 
-        self._animate_logo_glow()
+        if ENABLE_SIDEBAR_LOGO_ANIMATION:
+            self._animate_logo_glow()
+        else:
+            self._logo_anim_frame.configure(border_color="#1F3A39")
 
     def _animate_logo_glow(self):
         import math
