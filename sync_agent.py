@@ -1137,7 +1137,7 @@ class SyncAgentApp(ctk.CTk):
         self.set_entry(self.sent_folder_entry, "enviados")
         self.set_entry(self.error_folder_entry, "erros")
         self.set_entry(self.interval_entry, "15")
-        self.set_entry(self.update_manifest_url_entry, "")
+        self.set_entry(self.update_manifest_url_entry, "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json")
         self.auto_update_enabled = AUTO_UPDATE_ON_START
         self.move_sent_var.set(True)
         self.monitor_subfolders_var.set(True)
