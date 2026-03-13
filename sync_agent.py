@@ -31,6 +31,9 @@ WINDOWS_APP_ID = "vexper.sistemas.syncagent"
 APP_VERSION = "1.0.0"
 AUTO_UPDATE_ON_START = True
 FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
+ENABLE_CONSOLE_LOG = False
+LOGO_ANIMATION_INTERVAL_MS = 140
+WINDOW_MOVE_PAUSE_SECONDS = 0.35
 APP_CHANGELOG = [
     "Ajustes de interface e estabilidade.",
     "Melhorias no painel de sincronização.",
@@ -249,6 +252,9 @@ class SyncAgentApp(ctk.CTk):
         self.update_progress_label = None
         self.update_progress_bar = None
         self.update_progress_percent = None
+        self._ui_motion_suspend_until = 0.0
+        self._log_buffer = []
+        self._log_flush_scheduled = False
 
         self.try_set_app_user_model_id()
 
@@ -292,6 +298,7 @@ class SyncAgentApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
 
         self.create_ui()
+        self.bind("<Configure>", self._on_window_configure)
         self.after(150, self.try_set_window_icon)
         self.load_config()
         self.update_company_status()
@@ -651,6 +658,11 @@ class SyncAgentApp(ctk.CTk):
         except Exception:
             return
 
+        # While the window is being moved/resized, pause expensive border redraws.
+        if time.time() < self._ui_motion_suspend_until:
+            self.after(LOGO_ANIMATION_INTERVAL_MS, self._animate_logo_glow)
+            return
+
         # Pulse border from dim teal to bright teal
         t = 0.5 + 0.5 * math.sin(self._logo_glow_phase)
         tr, tg, tb = 0x0E, 0xA5, 0xA0   # bright teal  #0EA5A0
@@ -661,8 +673,12 @@ class SyncAgentApp(ctk.CTk):
         color = f"#{r:02x}{g:02x}{b:02x}"
         self._logo_anim_frame.configure(border_color=color)
 
-        self._logo_glow_phase += 0.05
-        self.after(50, self._animate_logo_glow)
+        self._logo_glow_phase += 0.03
+        self.after(LOGO_ANIMATION_INTERVAL_MS, self._animate_logo_glow)
+
+
+    def _on_window_configure(self, _event):
+        self._ui_motion_suspend_until = time.time() + WINDOW_MOVE_PAUSE_SECONDS
 
 
 
@@ -1152,14 +1168,31 @@ class SyncAgentApp(ctk.CTk):
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         final_message = f"[{timestamp}] {message}\n"
 
-        def append():
+        self._log_buffer.append(final_message)
+
+        if self._log_flush_scheduled:
+            if ENABLE_CONSOLE_LOG:
+                print(final_message.strip())
+            return
+
+        self._log_flush_scheduled = True
+
+        def append_batched():
+            if not self._log_buffer:
+                self._log_flush_scheduled = False
+                return
+            chunk = "".join(self._log_buffer)
+            self._log_buffer.clear()
             self.log_text.configure(state="normal")
-            self.log_text.insert("end", final_message)
+            self.log_text.insert("end", chunk)
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
+            self._log_flush_scheduled = False
 
-        self.ui(append)
-        print(final_message.strip())
+        self.after(120, append_batched)
+
+        if ENABLE_CONSOLE_LOG:
+            print(final_message.strip())
 
     def set_status(self, text, color=None):
         def update():
