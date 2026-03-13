@@ -30,6 +30,7 @@ MAX_TABLE_ROWS = 300
 WINDOWS_APP_ID = "vexper.sistemas.syncagent"
 APP_VERSION = "1.0.0"
 AUTO_UPDATE_ON_START = True
+FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
 APP_CHANGELOG = [
     "Ajustes de interface e estabilidade.",
     "Melhorias no painel de sincronização.",
@@ -1235,7 +1236,7 @@ class SyncAgentApp(ctk.CTk):
         return {
             "folder_1": self.folder1_entry.get().strip(),
             "folder_2": self.folder2_entry.get().strip(),
-            "api_base_url": self.api_base_entry.get().strip(),
+            "api_base_url": FIXED_API_BASE_URL,
             "upload_endpoint": self.upload_endpoint_entry.get().strip(),
             "api_token": self.api_token_entry.get().strip(),
             "company_id": self.company_id_entry.get().strip(),
@@ -1303,7 +1304,7 @@ class SyncAgentApp(ctk.CTk):
 
             self.set_entry(self.folder1_entry, config.get("folder_1", ""))
             self.set_entry(self.folder2_entry, config.get("folder_2", ""))
-            self.set_entry(self.api_base_entry, config.get("api_base_url", ""))
+            self.set_entry(self.api_base_entry, FIXED_API_BASE_URL)
             self.set_entry(self.upload_endpoint_entry, config.get("upload_endpoint", "/receiveDocument"))
             self.set_entry(self.api_token_entry, config.get("api_token", ""))
             self.set_entry(self.company_id_entry, config.get("company_id", ""))
@@ -1330,6 +1331,7 @@ class SyncAgentApp(ctk.CTk):
             self.last_seen_build_id = ""
 
     def set_default_values(self):
+        self.set_entry(self.api_base_entry, FIXED_API_BASE_URL)
         self.set_entry(self.upload_endpoint_entry, "/receiveDocument")
         self.set_entry(self.company_name_entry, "")
         self.set_entry(self.company_cnpj_entry, "")
