@@ -570,11 +570,11 @@ class SyncAgentApp(ctk.CTk):
 
     def load_sidebar_start_visual(self):
         asset_candidates = [
+            resource_path("foguete.gif"),
             resource_path("start_monitor.gif"),
             resource_path("rocket.gif"),
             resource_path("1.gif"),
             resource_path("1.png"),
-            resource_path("logo.png"),
         ]
 
         for asset_path in asset_candidates:
