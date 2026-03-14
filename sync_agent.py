@@ -266,15 +266,16 @@ class SyncAgentApp(ctk.CTk):
         self._hero_glow_strip = None
         self._hero_status_pill = None
         self._hero_status_value = None
-        self._button_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=13)
-        self._title_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=30)
-        self._section_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=18)
-        self._micro_font = ctk.CTkFont(family="Consolas", size=11)
+        self._button_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=14)
+        self._title_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=40)
+        self._section_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=19)
+        self._micro_font = ctk.CTkFont(family="Consolas", size=12)
 
         self.try_set_app_user_model_id()
 
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
+        ctk.set_widget_scaling(1.05)
 
         self.title(APP_TITLE)
         self.geometry("1350x900")
@@ -771,7 +772,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.header_title = ctk.CTkLabel(
             self.top_header,
-            text="Fiscal Sync Command",
+            text="VEXPER PORTAL SYS",
             font=self._title_font,
             text_color=self.text_main
         )
@@ -779,7 +780,7 @@ class SyncAgentApp(ctk.CTk):
 
         self.header_subtitle = ctk.CTkLabel(
             self.top_header,
-            text="Uma cabine operacional para varredura XML, upload automático e leitura de telemetria em tempo real.",
+            text="",
             font=ctk.CTkFont(family="Bahnschrift", size=14),
             text_color=self.text_soft
         )
@@ -829,8 +830,8 @@ class SyncAgentApp(ctk.CTk):
 
         hero_title = ctk.CTkLabel(
             hero_left,
-            text="Interface de comando desenhada para parecer sistema de bordo, não formulário comum.",
-            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=24),
+            text="VEXPER PORTAL SYS",
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=30),
             text_color=self.text_main,
             justify="left",
         )
