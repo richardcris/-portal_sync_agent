@@ -1,10 +1,11 @@
 @echo off
 cd /d %~dp0
 
-if not exist dist\VEXPER-SISTEMAS.exe (
-    echo Executavel nao encontrado em dist\VEXPER-SISTEMAS.exe
-    echo Gerando executavel primeiro...
-    call build_exe.bat --no-pause
+echo Gerando executavel atualizado antes do setup...
+call build_exe.bat --no-pause
+if errorlevel 1 (
+    echo Falha ao gerar executavel.
+    exit /b 1
 )
 
 set "ISCC_PATH="

@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import math
 import shutil
 import threading
 import subprocess
@@ -33,8 +34,8 @@ AUTO_UPDATE_ON_START = True
 FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
 DEFAULT_UPDATE_MANIFEST_URL = "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json"
 ENABLE_CONSOLE_LOG = False
-ENABLE_SIDEBAR_LOGO_ANIMATION = False
-LOGO_ANIMATION_INTERVAL_MS = 140
+ENABLE_SIDEBAR_LOGO_ANIMATION = True
+LOGO_ANIMATION_INTERVAL_MS = 60
 WINDOW_MOVE_PAUSE_SECONDS = 0.35
 APP_CHANGELOG = [
     "Ajustes de interface e estabilidade.",
@@ -258,6 +259,17 @@ class SyncAgentApp(ctk.CTk):
         self._ui_motion_suspend_until = 0.0
         self._log_buffer = []
         self._log_flush_scheduled = False
+        self._animated_buttons = []
+        self._animated_button_frames = {}
+        self._animated_button_index = 0
+        self._hero_glow_phase = 0.0
+        self._hero_glow_strip = None
+        self._hero_status_pill = None
+        self._hero_status_value = None
+        self._button_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=13)
+        self._title_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=30)
+        self._section_font = ctk.CTkFont(family="Bahnschrift SemiBold", size=18)
+        self._micro_font = ctk.CTkFont(family="Consolas", size=11)
 
         self.try_set_app_user_model_id()
 
@@ -281,17 +293,25 @@ class SyncAgentApp(ctk.CTk):
         self.scan_total = 0
         self.scan_done = 0
 
-        self.bg_main = "#0D1117"
-        self.bg_card = "#161B22"
-        self.bg_card_2 = "#21262D"
-        self.accent = "#0EA5A0"
-        self.accent_hover = "#0D9488"
-        self.text_main = "#E6EDF3"
-        self.text_soft = "#8B949E"
-        self.border = "#30363D"
-        self.success_color = "#16A34A"
-        self.error_color = "#DC2626"
-        self.warning_color = "#F59E0B"
+        self.bg_main = "#050B14"
+        self.bg_panel = "#091322"
+        self.bg_card = "#0B1728"
+        self.bg_card_2 = "#112238"
+        self.bg_card_3 = "#162C46"
+        self.accent = "#2DE2E6"
+        self.accent_hover = "#1CC6D8"
+        self.accent_alt = "#70FFB8"
+        self.text_main = "#EAF7FF"
+        self.text_soft = "#8BA8C7"
+        self.text_dim = "#58738F"
+        self.border = "#17324B"
+        self.border_soft = "#214A6B"
+        self.success_color = "#16C47F"
+        self.error_color = "#FF5D73"
+        self.warning_color = "#FFC857"
+        self.hero_glow = "#123C63"
+        self.hero_line = "#1B5D8F"
+        self.input_bg = "#08111D"
 
         self.configure(fg_color=self.bg_main)
 
@@ -311,6 +331,149 @@ class SyncAgentApp(ctk.CTk):
         self.after(2200, self.check_for_updates_automatically)
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def create_tech_icon_frames(self, kind, color, size=26, frame_count=12):
+        frames = []
+        rgba = tuple(int(color.lstrip("#")[idx:idx + 2], 16) for idx in (0, 2, 4))
+        canvas_size = size * 3
+        center = canvas_size / 2
+        radius = size * 0.88
+
+        for frame_idx in range(frame_count):
+            img = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            phase = (frame_idx / frame_count) * math.tau
+
+            if kind == "save":
+                pulse = 0.45 + 0.55 * math.sin(phase)
+                draw.rounded_rectangle(
+                    (center - radius * 0.95, center - radius * 0.95, center + radius * 0.95, center + radius * 0.95),
+                    radius=int(size * 0.36),
+                    outline=rgba + (190,),
+                    width=4,
+                )
+                draw.rounded_rectangle(
+                    (center - radius * 0.55, center - radius * 0.7, center + radius * 0.55, center + radius * 0.18),
+                    radius=int(size * 0.12),
+                    fill=rgba + (int(70 + 70 * pulse),),
+                )
+                draw.rectangle(
+                    (center - radius * 0.4, center + radius * 0.1, center + radius * 0.4, center + radius * 0.56),
+                    fill=rgba + (210,),
+                )
+            elif kind == "network":
+                orbit = radius * 0.28
+                for offset in (0, math.tau / 3, 2 * math.tau / 3):
+                    x = center + math.cos(phase + offset) * orbit
+                    y = center + math.sin(phase + offset) * orbit
+                    draw.line((center, center, x, y), fill=rgba + (135,), width=3)
+                    draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=rgba + (220,))
+                draw.ellipse((center - 6, center - 6, center + 6, center + 6), fill=rgba + (255,))
+            elif kind == "play":
+                glow = 0.45 + 0.55 * math.sin(phase)
+                draw.ellipse(
+                    (center - radius, center - radius, center + radius, center + radius),
+                    outline=rgba + (int(80 + 90 * glow),),
+                    width=4,
+                )
+                draw.polygon(
+                    [
+                        (center - radius * 0.28, center - radius * 0.42),
+                        (center - radius * 0.28, center + radius * 0.42),
+                        (center + radius * 0.46, center),
+                    ],
+                    fill=rgba + (255,),
+                )
+            elif kind == "stop":
+                pulse = 0.5 + 0.5 * math.sin(phase)
+                draw.rounded_rectangle(
+                    (center - radius, center - radius, center + radius, center + radius),
+                    radius=int(size * 0.4),
+                    outline=rgba + (int(90 + 70 * pulse),),
+                    width=4,
+                )
+                draw.rounded_rectangle(
+                    (center - radius * 0.45, center - radius * 0.45, center + radius * 0.45, center + radius * 0.45),
+                    radius=int(size * 0.22),
+                    fill=rgba + (230,),
+                )
+            elif kind == "scan":
+                sweep = (frame_idx / frame_count) * radius * 1.6
+                draw.rounded_rectangle(
+                    (center - radius, center - radius * 0.75, center + radius, center + radius * 0.75),
+                    radius=int(size * 0.28),
+                    outline=rgba + (180,),
+                    width=4,
+                )
+                draw.rectangle(
+                    (center - radius + sweep - 10, center - radius * 0.75, center - radius + sweep + 10, center + radius * 0.75),
+                    fill=rgba + (80,),
+                )
+                draw.line((center - radius * 0.75, center, center + radius * 0.75, center), fill=rgba + (220,), width=3)
+            elif kind == "update":
+                angle = phase
+                draw.arc(
+                    (center - radius, center - radius, center + radius, center + radius),
+                    start=30,
+                    end=280,
+                    fill=rgba + (215,),
+                    width=4,
+                )
+                tip_x = center + math.cos(angle - math.pi / 5) * radius
+                tip_y = center + math.sin(angle - math.pi / 5) * radius
+                draw.polygon(
+                    [
+                        (tip_x, tip_y),
+                        (tip_x - 10, tip_y - 4),
+                        (tip_x - 3, tip_y + 8),
+                    ],
+                    fill=rgba + (255,),
+                )
+
+            cropped = img.resize((size, size), Image.Resampling.LANCZOS)
+            frames.append(ctk.CTkImage(light_image=cropped, dark_image=cropped, size=(size, size)))
+        return frames
+
+    def register_animated_button(self, button, kind, color):
+        key = (kind, color)
+        if key not in self._animated_button_frames:
+            self._animated_button_frames[key] = self.create_tech_icon_frames(kind, color)
+        frames = self._animated_button_frames[key]
+        button.configure(image=frames[0], compound="left", anchor="w", font=self._button_font)
+        self._animated_buttons.append((button, frames))
+
+    def animate_button_icons(self):
+        if not self.winfo_exists() or not self._animated_buttons:
+            return
+        self._animated_button_index = (self._animated_button_index + 1) % 12
+        frame_index = self._animated_button_index
+        for button, frames in self._animated_buttons:
+            try:
+                if button.winfo_exists():
+                    button.configure(image=frames[frame_index % len(frames)])
+            except Exception:
+                pass
+        self.after(88, self.animate_button_icons)
+
+    def animate_hero_glow(self):
+        if not self.winfo_exists() or not self._hero_glow_strip:
+            return
+        wave = 0.5 + 0.5 * math.sin(self._hero_glow_phase)
+        r = int(18 + (52 - 18) * wave)
+        g = int(60 + (242 - 60) * wave)
+        b = int(99 + (230 - 99) * wave)
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        try:
+            if self._hero_glow_strip.winfo_exists():
+                self._hero_glow_strip.configure(fg_color=color)
+            if self._hero_status_pill and self._hero_status_pill.winfo_exists():
+                self._hero_status_pill.configure(border_color=color)
+            if self._hero_status_value and self._hero_status_value.winfo_exists():
+                self._hero_status_value.configure(text_color=color)
+        except Exception:
+            return
+        self._hero_glow_phase += 0.08
+        self.after(90, self.animate_hero_glow)
 
     # ---------------------------
     # UI
@@ -373,8 +536,8 @@ class SyncAgentApp(ctk.CTk):
     def create_sidebar(self):
         self.sidebar = ctk.CTkFrame(
             self.main_frame,
-            width=260,
-            fg_color="#0B0F15",
+            width=300,
+            fg_color=self.bg_panel,
             corner_radius=0,
             border_width=1,
             border_color=self.border
@@ -386,12 +549,18 @@ class SyncAgentApp(ctk.CTk):
             self.sidebar,
             fg_color="transparent",
             corner_radius=0,
-            width=236
+            width=276
         )
         self.sidebar_scroll.pack(fill="both", expand=True)
 
-        self.logo_wrap = ctk.CTkFrame(self.sidebar_scroll, fg_color="transparent")
-        self.logo_wrap.pack(fill="x", padx=18, pady=(20, 12))
+        self.logo_wrap = ctk.CTkFrame(
+            self.sidebar_scroll,
+            fg_color=self.bg_card,
+            corner_radius=24,
+            border_width=1,
+            border_color=self.border_soft,
+        )
+        self.logo_wrap.pack(fill="x", padx=18, pady=(20, 14))
 
         self._logo_glow_phase = 0.0
         self._logo_anim_frame = None
@@ -401,43 +570,55 @@ class SyncAgentApp(ctk.CTk):
         self.app_name = ctk.CTkLabel(
             self.logo_wrap,
             text="VEXPER SISTEMAS",
-            font=ctk.CTkFont(size=24, weight="bold"),
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=25),
             text_color=self.text_main
         )
-        self.app_name.pack(anchor="center")
+        self.app_name.pack(anchor="center", pady=(0, 2))
 
         self.app_subtitle = ctk.CTkLabel(
             self.logo_wrap,
-            text="Sync Agent Fiscal",
-            font=ctk.CTkFont(size=13),
+            text="SYNC CORE . FISCAL NODE",
+            font=self._micro_font,
             text_color=self.text_soft
         )
-        self.app_subtitle.pack(anchor="center", pady=(2, 0))
+        self.app_subtitle.pack(anchor="center")
+
+        self.app_chip = ctk.CTkLabel(
+            self.logo_wrap,
+            text="LIVE MONITORING INTERFACE",
+            font=self._micro_font,
+            text_color=self.accent_alt,
+            fg_color=self.bg_card_2,
+            corner_radius=999,
+            padx=12,
+            pady=6,
+        )
+        self.app_chip.pack(anchor="center", pady=(12, 18))
 
         self.separator1 = ctk.CTkFrame(self.sidebar_scroll, height=1, fg_color=self.border)
         self.separator1.pack(fill="x", padx=18, pady=14)
 
         self.menu_title = ctk.CTkLabel(
             self.sidebar_scroll,
-            text="Painel de Controle",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=self.text_soft
+            text="CENTRO DE CONTROLE",
+            font=self._micro_font,
+            text_color=self.accent_alt
         )
         self.menu_title.pack(anchor="w", padx=18, pady=(0, 10))
 
         self.status_card = ctk.CTkFrame(
             self.sidebar_scroll,
             fg_color=self.bg_card,
-            corner_radius=16,
+            corner_radius=22,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
         self.status_card.pack(fill="x", padx=18, pady=(0, 12))
 
         self.status_label_title = ctk.CTkLabel(
             self.status_card,
-            text="Status do Agente",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            text="Status do Núcleo",
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=15),
             text_color=self.text_main
         )
         self.status_label_title.pack(anchor="w", padx=14, pady=(14, 6))
@@ -445,7 +626,7 @@ class SyncAgentApp(ctk.CTk):
         self.status_label = ctk.CTkLabel(
             self.status_card,
             text="Pronto",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=22),
             text_color=self.accent
         )
         self.status_label.pack(anchor="w", padx=14, pady=(0, 6))
@@ -477,16 +658,16 @@ class SyncAgentApp(ctk.CTk):
         self.stats_card = ctk.CTkFrame(
             self.sidebar,
             fg_color=self.bg_card,
-            corner_radius=16,
+            corner_radius=22,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
         self.stats_card.pack(fill="x", padx=18, pady=(0, 12))
 
         self.stats_title = ctk.CTkLabel(
             self.stats_card,
-            text="Resultados",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            text="Telemetria",
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=15),
             text_color=self.text_main
         )
         self.stats_title.pack(anchor="w", padx=14, pady=(14, 8))
@@ -502,56 +683,75 @@ class SyncAgentApp(ctk.CTk):
 
         self.actions_title = ctk.CTkLabel(
             self.sidebar_scroll,
-            text="Ações rápidas",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=self.text_soft
+            text="AÇÕES ORQUESTRADAS",
+            font=self._micro_font,
+            text_color=self.accent_alt
         )
         self.actions_title.pack(anchor="w", padx=18, pady=(6, 10))
 
         self.sidebar_save = ctk.CTkButton(
             self.sidebar_scroll, text="Salvar Configuração", command=self.save_config,
-            fg_color=self.accent, hover_color=self.accent_hover, height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_save.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_test = ctk.CTkButton(
             self.sidebar_scroll, text="Testar Conexão", command=self.test_upload,
-            fg_color=self.bg_card_2, hover_color="#30363D", height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_test.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_start = ctk.CTkButton(
             self.sidebar_scroll, text="Iniciar Monitoramento", command=self.start_monitoring,
-            fg_color=self.success_color, hover_color="#15803D", height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_start.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_stop = ctk.CTkButton(
             self.sidebar_scroll, text="Parar Monitoramento", command=self.stop_monitoring,
-            fg_color=self.error_color, hover_color="#B91C1C", height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_stop.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_existing = ctk.CTkButton(
             self.sidebar_scroll, text="Processar Existentes", command=self.process_existing_files,
-            fg_color=self.bg_card_2, hover_color="#30363D", height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_existing.pack(fill="x", padx=18, pady=6)
 
         self.sidebar_update = ctk.CTkButton(
             self.sidebar_scroll, text="Verificar Atualização", command=self.check_for_updates,
-            fg_color=self.bg_card_2, hover_color="#30363D", height=40
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, height=48,
+            corner_radius=18, border_width=1, border_color=self.border_soft,
+            text_color=self.text_main
         )
         self.sidebar_update.pack(fill="x", padx=18, pady=6)
+
+        self.register_animated_button(self.sidebar_save, "save", self.accent)
+        self.register_animated_button(self.sidebar_test, "network", self.warning_color)
+        self.register_animated_button(self.sidebar_start, "play", self.success_color)
+        self.register_animated_button(self.sidebar_stop, "stop", self.error_color)
+        self.register_animated_button(self.sidebar_existing, "scan", self.accent_alt)
+        self.register_animated_button(self.sidebar_update, "update", self.accent)
 
         self.separator2 = ctk.CTkFrame(self.sidebar_scroll, height=1, fg_color=self.border)
         self.separator2.pack(fill="x", padx=18, pady=14)
 
         self.footer_label = ctk.CTkLabel(
             self.sidebar_scroll,
-            text="VEXPER SISTEMAS ©",
-            text_color="#6B7280",
-            font=ctk.CTkFont(size=11)
+            text="VEXPER SYSTEMS . TECH INTERFACE",
+            text_color=self.text_dim,
+            font=self._micro_font
         )
         self.footer_label.pack(anchor="w", padx=18, pady=(0, 18))
 
@@ -566,21 +766,21 @@ class SyncAgentApp(ctk.CTk):
             fg_color=self.bg_main,
             corner_radius=0
         )
-        self.top_header.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 10))
+        self.top_header.grid(row=0, column=0, sticky="ew", padx=24, pady=(18, 12))
         self.top_header.grid_columnconfigure(0, weight=1)
 
         self.header_title = ctk.CTkLabel(
             self.top_header,
-            text="Painel do Agente Fiscal",
-            font=ctk.CTkFont(size=28, weight="bold"),
+            text="Fiscal Sync Command",
+            font=self._title_font,
             text_color=self.text_main
         )
         self.header_title.grid(row=0, column=0, sticky="w")
 
         self.header_subtitle = ctk.CTkLabel(
             self.top_header,
-            text="Monitore XML/NFC-e, envie automaticamente e acompanhe os resultados em tempo real.",
-            font=ctk.CTkFont(size=13),
+            text="Uma cabine operacional para varredura XML, upload automático e leitura de telemetria em tempo real.",
+            font=ctk.CTkFont(family="Bahnschrift", size=14),
             text_color=self.text_soft
         )
         self.header_subtitle.grid(row=1, column=0, sticky="w", pady=(4, 0))
@@ -589,13 +789,105 @@ class SyncAgentApp(ctk.CTk):
             self.content,
             fg_color="transparent"
         )
-        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 18))
+        self.scroll_frame.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 18))
         self.scroll_frame.grid_columnconfigure(0, weight=1)
 
+        self.create_hero_card()
         self.create_config_card()
         self.create_progress_card()
         self.create_table_card()
         self.create_log_card()
+        self.animate_button_icons()
+        self.animate_hero_glow()
+
+    def create_hero_card(self):
+        self.hero_card = ctk.CTkFrame(
+            self.scroll_frame,
+            fg_color=self.bg_card,
+            corner_radius=28,
+            border_width=1,
+            border_color=self.border_soft,
+        )
+        self.hero_card.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        self.hero_card.grid_columnconfigure(0, weight=1)
+        self.hero_card.grid_columnconfigure(1, weight=0)
+
+        hero_left = ctk.CTkFrame(self.hero_card, fg_color="transparent")
+        hero_left.grid(row=0, column=0, sticky="nsew", padx=(22, 16), pady=(20, 20))
+        hero_left.grid_columnconfigure((0, 1, 2), weight=1)
+
+        self._hero_glow_strip = ctk.CTkFrame(self.hero_card, height=4, fg_color=self.hero_glow, corner_radius=999)
+        self._hero_glow_strip.grid(row=0, column=0, columnspan=2, sticky="new", padx=18, pady=(10, 0))
+
+        hero_label = ctk.CTkLabel(
+            hero_left,
+            text="SYNC GRID // REALTIME OPERATIONS",
+            font=self._micro_font,
+            text_color=self.accent_alt,
+        )
+        hero_label.grid(row=0, column=0, columnspan=3, sticky="w")
+
+        hero_title = ctk.CTkLabel(
+            hero_left,
+            text="Interface de comando desenhada para parecer sistema de bordo, não formulário comum.",
+            font=ctk.CTkFont(family="Bahnschrift SemiBold", size=24),
+            text_color=self.text_main,
+            justify="left",
+        )
+        hero_title.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 8))
+
+        hero_desc = ctk.CTkLabel(
+            hero_left,
+            text="Use o painel para operar varredura, conexões e atualização com feedback visual mais claro, contraste alto e leitura rápida.",
+            font=ctk.CTkFont(family="Bahnschrift", size=14),
+            text_color=self.text_soft,
+            justify="left",
+            wraplength=720,
+        )
+        hero_desc.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 14))
+
+        self._hero_status_pill = ctk.CTkFrame(
+            hero_left,
+            fg_color=self.bg_card_2,
+            corner_radius=999,
+            border_width=1,
+            border_color=self.hero_line,
+        )
+        self._hero_status_pill.grid(row=3, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
+        ctk.CTkLabel(self._hero_status_pill, text="ENGINE", font=self._micro_font, text_color=self.text_dim).pack(side="left", padx=(12, 8), pady=8)
+        self._hero_status_value = ctk.CTkLabel(self._hero_status_pill, text="READY", font=self._micro_font, text_color=self.accent)
+        self._hero_status_value.pack(side="left", padx=(0, 12), pady=8)
+
+        self.hero_version_pill = ctk.CTkFrame(hero_left, fg_color=self.bg_card_2, corner_radius=999)
+        self.hero_version_pill.grid(row=3, column=1, sticky="w", padx=(0, 12), pady=(0, 8))
+        ctk.CTkLabel(self.hero_version_pill, text="VERSION", font=self._micro_font, text_color=self.text_dim).pack(side="left", padx=(12, 8), pady=8)
+        self.hero_version_value = ctk.CTkLabel(self.hero_version_pill, text=APP_VERSION, font=self._micro_font, text_color=self.text_main)
+        self.hero_version_value.pack(side="left", padx=(0, 12), pady=8)
+
+        self.hero_company_pill = ctk.CTkFrame(hero_left, fg_color=self.bg_card_2, corner_radius=999)
+        self.hero_company_pill.grid(row=3, column=2, sticky="w", pady=(0, 8))
+        ctk.CTkLabel(self.hero_company_pill, text="COMPANY", font=self._micro_font, text_color=self.text_dim).pack(side="left", padx=(12, 8), pady=8)
+        self.hero_company_value = ctk.CTkLabel(self.hero_company_pill, text="AUTO", font=self._micro_font, text_color=self.text_main)
+        self.hero_company_value.pack(side="left", padx=(0, 12), pady=8)
+
+        hero_right = ctk.CTkFrame(
+            self.hero_card,
+            fg_color=self.bg_card_2,
+            corner_radius=24,
+            border_width=1,
+            border_color=self.border_soft,
+        )
+        hero_right.grid(row=0, column=1, sticky="ns", padx=(0, 22), pady=(20, 20))
+
+        ctk.CTkLabel(hero_right, text="LIVE", font=self._micro_font, text_color=self.accent_alt).pack(anchor="w", padx=16, pady=(16, 8))
+        self.hero_metric_primary = ctk.CTkLabel(hero_right, text="0", font=ctk.CTkFont(family="Bahnschrift SemiBold", size=34), text_color=self.text_main)
+        self.hero_metric_primary.pack(anchor="w", padx=16)
+        ctk.CTkLabel(hero_right, text="arquivos processados", font=ctk.CTkFont(family="Bahnschrift", size=13), text_color=self.text_soft).pack(anchor="w", padx=16)
+
+        self.hero_metric_success = ctk.CTkLabel(hero_right, text="Sucesso 0", font=ctk.CTkFont(family="Bahnschrift SemiBold", size=16), text_color=self.success_color)
+        self.hero_metric_success.pack(anchor="w", padx=16, pady=(16, 4))
+        self.hero_metric_error = ctk.CTkLabel(hero_right, text="Erros 0", font=ctk.CTkFont(family="Bahnschrift SemiBold", size=16), text_color=self.error_color)
+        self.hero_metric_error.pack(anchor="w", padx=16, pady=(0, 16))
 
     def load_logo(self):
         # Destroy previous widgets if reloaded
@@ -611,12 +903,12 @@ class SyncAgentApp(ctk.CTk):
         # Outer animated badge frame
         self._logo_anim_frame = ctk.CTkFrame(
             self.logo_wrap,
-            fg_color=self.bg_card,
-            corner_radius=14,
+            fg_color=self.bg_card_2,
+            corner_radius=18,
             border_width=2,
             border_color=self.accent,
         )
-        self._logo_anim_frame.pack(anchor="center", pady=(0, 8))
+        self._logo_anim_frame.pack(anchor="center", pady=(18, 10))
 
         self.logo_label = ctk.CTkLabel(self._logo_anim_frame, text="", fg_color="transparent")
         self.logo_label.pack(padx=16, pady=14)
@@ -889,22 +1181,30 @@ class SyncAgentApp(ctk.CTk):
         self.config_card = ctk.CTkFrame(
             self.scroll_frame,
             fg_color=self.bg_card,
-            corner_radius=20,
+            corner_radius=26,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
-        self.config_card.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+        self.config_card.grid(row=1, column=0, sticky="ew", pady=(0, 14))
         self.config_card.grid_columnconfigure(1, weight=1)
 
         self.config_title = ctk.CTkLabel(
             self.config_card,
-            text="Configurações de Sincronização",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            text="Configuração de Fluxo",
+            font=self._section_font,
             text_color=self.text_main
         )
         self.config_title.grid(row=0, column=0, columnspan=3, sticky="w", padx=18, pady=(18, 16))
 
-        self._cfg_row = 1
+        self.config_subtitle = ctk.CTkLabel(
+            self.config_card,
+            text="Pontos de origem, endpoint, identificação e política operacional do agente.",
+            font=ctk.CTkFont(family="Bahnschrift", size=13),
+            text_color=self.text_soft,
+        )
+        self.config_subtitle.grid(row=1, column=0, columnspan=3, sticky="w", padx=18, pady=(0, 10))
+
+        self._cfg_row = 2
 
         self.folder1_entry = self.add_entry_with_button("Pasta 1", lambda: self.select_folder(self.folder1_entry))
         self.folder2_entry = self.add_entry_with_button("Pasta 2", lambda: self.select_folder(self.folder2_entry))
@@ -962,49 +1262,60 @@ class SyncAgentApp(ctk.CTk):
 
         self.save_btn = ctk.CTkButton(
             self.buttons_frame, text="Salvar", command=self.save_config,
-            fg_color=self.accent, hover_color=self.accent_hover, width=140
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, width=156, height=46,
+            corner_radius=16, border_width=1, border_color=self.border_soft, text_color=self.text_main
         )
         self.save_btn.grid(row=0, column=0, padx=(0, 10), pady=6)
 
         self.test_btn = ctk.CTkButton(
             self.buttons_frame, text="Testar Upload", command=self.test_upload,
-            fg_color=self.bg_card_2, hover_color="#30363D", width=140
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, width=156, height=46,
+            corner_radius=16, border_width=1, border_color=self.border_soft, text_color=self.text_main
         )
         self.test_btn.grid(row=0, column=1, padx=(0, 10), pady=6)
 
         self.start_btn = ctk.CTkButton(
             self.buttons_frame, text="Iniciar", command=self.start_monitoring,
-            fg_color=self.success_color, hover_color="#15803D", width=140
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, width=156, height=46,
+            corner_radius=16, border_width=1, border_color=self.border_soft, text_color=self.text_main
         )
         self.start_btn.grid(row=0, column=2, padx=(0, 10), pady=6)
 
         self.stop_btn = ctk.CTkButton(
             self.buttons_frame, text="Parar", command=self.stop_monitoring,
-            fg_color=self.error_color, hover_color="#B91C1C", width=140
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, width=156, height=46,
+            corner_radius=16, border_width=1, border_color=self.border_soft, text_color=self.text_main
         )
         self.stop_btn.grid(row=0, column=3, padx=(0, 10), pady=6)
 
         self.process_existing_btn = ctk.CTkButton(
             self.buttons_frame, text="Processar Existentes", command=self.process_existing_files,
-            fg_color=self.bg_card_2, hover_color="#30363D", width=180
+            fg_color=self.bg_card_2, hover_color=self.bg_card_3, width=200, height=46,
+            corner_radius=16, border_width=1, border_color=self.border_soft, text_color=self.text_main
         )
         self.process_existing_btn.grid(row=0, column=4, padx=(0, 10), pady=6)
+
+        self.register_animated_button(self.save_btn, "save", self.accent)
+        self.register_animated_button(self.test_btn, "network", self.warning_color)
+        self.register_animated_button(self.start_btn, "play", self.success_color)
+        self.register_animated_button(self.stop_btn, "stop", self.error_color)
+        self.register_animated_button(self.process_existing_btn, "scan", self.accent_alt)
 
     def create_progress_card(self):
         self.progress_card = ctk.CTkFrame(
             self.scroll_frame,
             fg_color=self.bg_card,
-            corner_radius=20,
+            corner_radius=26,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
-        self.progress_card.grid(row=1, column=0, sticky="ew", pady=(0, 14))
+        self.progress_card.grid(row=2, column=0, sticky="ew", pady=(0, 14))
         self.progress_card.grid_columnconfigure(0, weight=1)
 
         self.progress_title = ctk.CTkLabel(
             self.progress_card,
-            text="Progresso do Processamento",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            text="Radar de Processamento",
+            font=self._section_font,
             text_color=self.text_main
         )
         self.progress_title.grid(row=0, column=0, sticky="w", padx=18, pady=(18, 10))
@@ -1019,6 +1330,7 @@ class SyncAgentApp(ctk.CTk):
         self.progress_bar = ctk.CTkProgressBar(self.progress_card, height=18)
         self.progress_bar.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 10))
         self.progress_bar.set(0)
+        self.progress_bar.configure(progress_color=self.accent, fg_color=self.bg_card_2)
 
         self.progress_percent_label = ctk.CTkLabel(
             self.progress_card,
@@ -1032,17 +1344,17 @@ class SyncAgentApp(ctk.CTk):
         self.table_card = ctk.CTkFrame(
             self.scroll_frame,
             fg_color=self.bg_card,
-            corner_radius=20,
+            corner_radius=26,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
-        self.table_card.grid(row=2, column=0, sticky="ew", pady=(0, 14))
+        self.table_card.grid(row=3, column=0, sticky="ew", pady=(0, 14))
         self.table_card.grid_columnconfigure(0, weight=1)
 
         self.table_title = ctk.CTkLabel(
             self.table_card,
-            text="Tabela de Arquivos Enviados",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            text="Fluxo de Arquivos Transmitidos",
+            font=self._section_font,
             text_color=self.text_main
         )
         self.table_title.grid(row=0, column=0, sticky="w", padx=18, pady=(18, 12))
@@ -1059,20 +1371,20 @@ class SyncAgentApp(ctk.CTk):
 
         style.configure(
             "Treeview",
-            background="#0D1117",
-            foreground="#E6EDF3",
-            fieldbackground="#0D1117",
-            rowheight=28,
-            bordercolor="#30363D",
+            background=self.input_bg,
+            foreground=self.text_main,
+            fieldbackground=self.input_bg,
+            rowheight=30,
+            bordercolor=self.border,
             borderwidth=0
         )
         style.configure(
             "Treeview.Heading",
-            background="#161B22",
-            foreground="#E6EDF3",
+            background=self.bg_card_2,
+            foreground=self.text_main,
             relief="flat"
         )
-        style.map("Treeview", background=[("selected", "#0EA5A0")])
+        style.map("Treeview", background=[("selected", self.hero_line)])
 
         columns = ("datahora", "arquivo", "empresa", "status", "http", "mensagem")
         self.tree = ttk.Treeview(self.table_wrap, columns=columns, show="headings", height=10)
@@ -1101,38 +1413,40 @@ class SyncAgentApp(ctk.CTk):
         self.log_card = ctk.CTkFrame(
             self.scroll_frame,
             fg_color=self.bg_card,
-            corner_radius=20,
+            corner_radius=26,
             border_width=1,
-            border_color=self.border
+            border_color=self.border_soft
         )
-        self.log_card.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self.log_card.grid(row=4, column=0, sticky="ew", pady=(0, 10))
         self.log_card.grid_columnconfigure(0, weight=1)
 
         self.log_title = ctk.CTkLabel(
             self.log_card,
-            text="Log de Atividades",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            text="Console Operacional",
+            font=self._section_font,
             text_color=self.text_main
         )
         self.log_title.grid(row=0, column=0, sticky="w", padx=18, pady=(18, 12))
 
-        self.log_text = ctk.CTkTextbox(self.log_card, height=220, fg_color="#111318", border_width=1, border_color=self.border)
+        self.log_text = ctk.CTkTextbox(self.log_card, height=220, fg_color=self.input_bg, border_width=1, border_color=self.border_soft, text_color=self.text_main)
         self.log_text.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 18))
         self.log_text.insert("end", "Sistema iniciado.\n")
         self.log_text.configure(state="disabled")
 
     def add_entry(self, label_text, show=None):
         row = self._cfg_row
-        label = ctk.CTkLabel(self.config_card, text=label_text, width=210, anchor="w", text_color=self.text_main)
+        label = ctk.CTkLabel(self.config_card, text=label_text.upper(), width=210, anchor="w", text_color=self.text_soft, font=self._micro_font)
         label.grid(row=row, column=0, sticky="w", padx=(18, 12), pady=8)
 
         entry = ctk.CTkEntry(
             self.config_card,
-            height=40,
+            height=44,
             show=show,
-            fg_color="#111318",
-            border_color=self.border,
-            text_color=self.text_main
+            fg_color=self.input_bg,
+            border_color=self.border_soft,
+            text_color=self.text_main,
+            corner_radius=14,
+            font=ctk.CTkFont(family="Bahnschrift", size=13)
         )
         entry.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=8)
 
@@ -1141,15 +1455,17 @@ class SyncAgentApp(ctk.CTk):
 
     def add_entry_with_button(self, label_text, browse_command):
         row = self._cfg_row
-        label = ctk.CTkLabel(self.config_card, text=label_text, width=210, anchor="w", text_color=self.text_main)
+        label = ctk.CTkLabel(self.config_card, text=label_text.upper(), width=210, anchor="w", text_color=self.text_soft, font=self._micro_font)
         label.grid(row=row, column=0, sticky="w", padx=(18, 12), pady=8)
 
         entry = ctk.CTkEntry(
             self.config_card,
-            height=40,
-            fg_color="#111318",
-            border_color=self.border,
-            text_color=self.text_main
+            height=44,
+            fg_color=self.input_bg,
+            border_color=self.border_soft,
+            text_color=self.text_main,
+            corner_radius=14,
+            font=ctk.CTkFont(family="Bahnschrift", size=13)
         )
         entry.grid(row=row, column=1, sticky="ew", padx=(0, 12), pady=8)
 
@@ -1158,10 +1474,18 @@ class SyncAgentApp(ctk.CTk):
             text="Selecionar",
             width=120,
             command=browse_command,
-            fg_color=self.accent,
-            hover_color=self.accent_hover
+            fg_color=self.bg_card_2,
+            hover_color=self.bg_card_3,
+            corner_radius=14,
+            height=44,
+            border_width=1,
+            border_color=self.border_soft,
+            text_color=self.text_main,
+            font=self._button_font
         )
         button.grid(row=row, column=2, sticky="e", padx=(0, 18), pady=8)
+
+        self.register_animated_button(button, "scan", self.accent)
 
         self._cfg_row += 1
         return entry
@@ -1207,6 +1531,10 @@ class SyncAgentApp(ctk.CTk):
             self.status_label.configure(text=text)
             if color:
                 self.status_label.configure(text_color=color)
+            if self._hero_status_value and self._hero_status_value.winfo_exists():
+                self._hero_status_value.configure(text=str(text).upper())
+                if color:
+                    self._hero_status_value.configure(text_color=color)
         self.ui(update)
 
     def update_company_status(self):
@@ -1216,11 +1544,19 @@ class SyncAgentApp(ctk.CTk):
         self.company_name_status_label.configure(text=f"Empresa: {company_name}")
         self.company_cnpj_status_label.configure(text=f"CNPJ: {company_cnpj}")
         self.company_id_status_label.configure(text=f"Empresa ID: {company_id}")
+        if hasattr(self, "hero_company_value") and self.hero_company_value.winfo_exists():
+            self.hero_company_value.configure(text=(company_id if company_id != "-" else "AUTO").upper())
 
     def update_stats_labels(self):
         self.total_label.configure(text=f"Total processados: {self.total_processed}")
         self.success_label.configure(text=f"Sucesso: {self.success_count}")
         self.error_label.configure(text=f"Erros: {self.error_count}")
+        if hasattr(self, "hero_metric_primary") and self.hero_metric_primary.winfo_exists():
+            self.hero_metric_primary.configure(text=str(self.total_processed))
+        if hasattr(self, "hero_metric_success") and self.hero_metric_success.winfo_exists():
+            self.hero_metric_success.configure(text=f"Sucesso {self.success_count}")
+        if hasattr(self, "hero_metric_error") and self.hero_metric_error.winfo_exists():
+            self.hero_metric_error.configure(text=f"Erros {self.error_count}")
 
     def update_progress(self, done, total, text=None):
         self.scan_done = done
