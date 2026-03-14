@@ -28,9 +28,10 @@ APP_TITLE = "VEXPER SISTEMAS"
 CONFIG_FILE = "config.json"
 MAX_TABLE_ROWS = 300
 WINDOWS_APP_ID = "vexper.sistemas.syncagent"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.19"
 AUTO_UPDATE_ON_START = True
 FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
+DEFAULT_UPDATE_MANIFEST_URL = "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json"
 ENABLE_CONSOLE_LOG = False
 ENABLE_SIDEBAR_LOGO_ANIMATION = False
 LOGO_ANIMATION_INTERVAL_MS = 140
@@ -248,6 +249,7 @@ class SyncAgentApp(ctk.CTk):
         self.runtime_version_label = f"{APP_VERSION} ({self.runtime_build_id})"
         self.last_seen_build_id = ""
         self.last_applied_setup_sha256 = ""
+        self.last_applied_version = ""
         self.auto_update_enabled = AUTO_UPDATE_ON_START
         self.update_progress_window = None
         self.update_progress_label = None
@@ -1288,6 +1290,7 @@ class SyncAgentApp(ctk.CTk):
             "update_manifest_url": self.update_manifest_url_entry.get().strip(),
             "last_seen_build_id": self.last_seen_build_id,
             "last_applied_setup_sha256": self.last_applied_setup_sha256,
+            "last_applied_version": self.last_applied_version,
             "auto_update_enabled": self.auto_update_enabled,
             "move_sent_files": self.move_sent_var.get(),
             "monitor_subfolders": self.monitor_subfolders_var.get(),
@@ -1308,6 +1311,7 @@ class SyncAgentApp(ctk.CTk):
                 config = self.get_config()
 
             config["last_applied_setup_sha256"] = self.last_applied_setup_sha256
+            config["last_applied_version"] = self.last_applied_version
 
             with open(get_primary_config_path(), "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
@@ -1354,9 +1358,13 @@ class SyncAgentApp(ctk.CTk):
             self.set_entry(self.sent_folder_entry, config.get("sent_folder", "enviados"))
             self.set_entry(self.error_folder_entry, config.get("error_folder", "erros"))
             self.set_entry(self.interval_entry, str(config.get("scan_interval", "15")))
-            self.set_entry(self.update_manifest_url_entry, config.get("update_manifest_url", ""))
+            self.set_entry(
+                self.update_manifest_url_entry,
+                str(config.get("update_manifest_url", "") or "").strip() or DEFAULT_UPDATE_MANIFEST_URL
+            )
             self.last_seen_build_id = str(config.get("last_seen_build_id", "")).strip()
             self.last_applied_setup_sha256 = str(config.get("last_applied_setup_sha256", "")).strip().lower()
+            self.last_applied_version = str(config.get("last_applied_version", "")).strip()
             self.auto_update_enabled = normalize_bool(config.get("auto_update_enabled", AUTO_UPDATE_ON_START), AUTO_UPDATE_ON_START)
 
             self.move_sent_var.set(normalize_bool(config.get("move_sent_files", True), True))
@@ -1379,8 +1387,9 @@ class SyncAgentApp(ctk.CTk):
         self.set_entry(self.sent_folder_entry, "enviados")
         self.set_entry(self.error_folder_entry, "erros")
         self.set_entry(self.interval_entry, "15")
-        self.set_entry(self.update_manifest_url_entry, "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json")
+        self.set_entry(self.update_manifest_url_entry, DEFAULT_UPDATE_MANIFEST_URL)
         self.last_applied_setup_sha256 = ""
+        self.last_applied_version = ""
         self.auto_update_enabled = AUTO_UPDATE_ON_START
         self.move_sent_var.set(True)
         self.monitor_subfolders_var.set(True)
@@ -1445,7 +1454,8 @@ class SyncAgentApp(ctk.CTk):
 
             if setup_sha256:
                 self.last_applied_setup_sha256 = str(setup_sha256).strip().lower()
-                self.persist_update_hash_state()
+            self.last_applied_version = str(latest_version or "").strip()
+            self.persist_update_hash_state()
 
             if not silent:
                 messagebox.showinfo(
@@ -1463,6 +1473,9 @@ class SyncAgentApp(ctk.CTk):
 
     def check_for_updates(self, silent=False, auto_install=False):
         update_url = self.update_manifest_url_entry.get().strip()
+        if not update_url:
+            update_url = DEFAULT_UPDATE_MANIFEST_URL
+            self.set_entry(self.update_manifest_url_entry, update_url)
         if not update_url:
             if not silent:
                 messagebox.showwarning("Atualização", "Informe a URL de atualização nas configurações.")
@@ -1484,14 +1497,24 @@ class SyncAgentApp(ctk.CTk):
             current_tuple = normalize_version(APP_VERSION)
             latest_tuple = normalize_version(latest_version)
             known_hash = str(self.last_applied_setup_sha256 or "").strip().lower()
-            hash_changed = bool(setup_sha256) and setup_sha256 != known_hash
+            known_version = str(self.last_applied_version or "").strip()
+            known_version_tuple = normalize_version(known_version) if known_version else (0, 0, 0)
+            effective_current_tuple = max(current_tuple, known_version_tuple)
+            effective_current_label = APP_VERSION
+            if known_version and known_version_tuple >= current_tuple:
+                effective_current_label = f"{APP_VERSION} (último pacote aplicado: {known_version})"
 
-            if latest_tuple > current_tuple or (latest_tuple == current_tuple and hash_changed):
+            hash_changed = bool(setup_sha256) and setup_sha256 != known_hash
+            already_applied_same_package = bool(setup_sha256) and setup_sha256 == known_hash
+
+            if not already_applied_same_package and (
+                latest_tuple > effective_current_tuple or (latest_tuple == effective_current_tuple and hash_changed)
+            ):
                 msg = (
                     f"Nova versão disponível: {latest_version}\n"
-                    f"Versão atual: {APP_VERSION}\n\n"
+                    f"Versão atual: {effective_current_label}\n\n"
                 )
-                if latest_tuple == current_tuple and hash_changed:
+                if latest_tuple == effective_current_tuple and hash_changed:
                     msg += "Detectamos mudança no pacote da release (SHA atualizado).\n\n"
                 if notes:
                     msg += f"Novidades:\n{notes}\n\n"
@@ -1523,10 +1546,10 @@ class SyncAgentApp(ctk.CTk):
                 if not silent:
                     messagebox.showinfo(
                         "Atualização",
-                        f"Nenhuma atualização disponível.\nVersão atual: {APP_VERSION}\nÚltima versão: {latest_version}"
+                        f"Nenhuma atualização disponível.\nVersão atual: {effective_current_label}\nÚltima versão: {latest_version}"
                     )
                 else:
-                    self.log(f"Sem atualização. Atual={APP_VERSION} | Última={latest_version}")
+                    self.log(f"Sem atualização. Atual={effective_current_label} | Última={latest_version}")
         except Exception as e:
             self.log(f"Erro ao verificar atualização: {e}")
             if not silent:

@@ -71,8 +71,11 @@ Se quiser publicar sem depender de GitHub Actions, use o comando local:
 
 1. execute `publicar_atualizacao.bat`
 2. informe versao, URL publica base e notas
-3. o script gera build + setup + manifesto automaticamente
-4. suba a pasta `public_update` para seu hosting (CDN, servidor web, S3, etc.)
+3. o script sincroniza automaticamente o `APP_VERSION` no codigo
+4. o script gera build + setup + manifesto usando a mesma versao
+5. suba a pasta `public_update` para seu hosting (CDN, servidor web, S3, etc.)
+
+Isso evita divergencia entre versao do executavel instalado e versao publicada no `manifest.json`.
 
 Depois configure os agentes com:
 
