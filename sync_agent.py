@@ -1504,17 +1504,22 @@ class SyncAgentApp(ctk.CTk):
             if known_version and known_version_tuple >= current_tuple:
                 effective_current_label = f"{APP_VERSION} (último pacote aplicado: {known_version})"
 
-            hash_changed = bool(setup_sha256) and setup_sha256 != known_hash
+            # hash_changed só é relevante se já temos um hash anterior gravado
+            # (evita re-instalação em primeiro boot onde known_hash é vazio)
+            hash_changed = (
+                bool(setup_sha256) and bool(known_hash) and setup_sha256 != known_hash
+                and latest_tuple == effective_current_tuple
+            )
             already_applied_same_package = bool(setup_sha256) and setup_sha256 == known_hash
 
             if not already_applied_same_package and (
-                latest_tuple > effective_current_tuple or (latest_tuple == effective_current_tuple and hash_changed)
+                latest_tuple > effective_current_tuple or hash_changed
             ):
                 msg = (
                     f"Nova versão disponível: {latest_version}\n"
                     f"Versão atual: {effective_current_label}\n\n"
                 )
-                if latest_tuple == effective_current_tuple and hash_changed:
+                if hash_changed:
                     msg += "Detectamos mudança no pacote da release (SHA atualizado).\n\n"
                 if notes:
                     msg += f"Novidades:\n{notes}\n\n"
