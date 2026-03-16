@@ -34,9 +34,14 @@ AUTO_UPDATE_ON_START = True
 FIXED_API_BASE_URL = "https://sync-fiscal-hub.base44.app/api/functions"
 DEFAULT_UPDATE_MANIFEST_URL = "https://github.com/richardcris/-portal_sync_agent/releases/latest/download/manifest.json"
 ENABLE_CONSOLE_LOG = False
-ENABLE_SIDEBAR_LOGO_ANIMATION = True
-LOGO_ANIMATION_INTERVAL_MS = 60
+ENABLE_SIDEBAR_LOGO_ANIMATION = False
+ENABLE_BUTTON_ICON_ANIMATION = False
+ENABLE_HERO_GLOW_ANIMATION = False
+LOGO_ANIMATION_INTERVAL_MS = 120
+BUTTON_ICON_ANIMATION_INTERVAL_MS = 130
+HERO_GLOW_ANIMATION_INTERVAL_MS = 160
 WINDOW_MOVE_PAUSE_SECONDS = 0.35
+WINDOW_SCROLL_PAUSE_SECONDS = 0.22
 APP_CHANGELOG = [
     "Ajustes de interface e estabilidade.",
     "Melhorias no painel de sincronização.",
@@ -322,8 +327,10 @@ class SyncAgentApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
 
         self.create_ui()
-        if ENABLE_SIDEBAR_LOGO_ANIMATION:
-            self.bind("<Configure>", self._on_window_configure)
+        self.bind("<Configure>", self._on_window_configure)
+        self.bind_all("<MouseWheel>", self._on_mousewheel_activity, add="+")
+        self.bind_all("<Button-4>", self._on_mousewheel_activity, add="+")
+        self.bind_all("<Button-5>", self._on_mousewheel_activity, add="+")
         self.after(150, self.try_set_window_icon)
         self.load_config()
         self.update_company_status()
@@ -446,6 +453,9 @@ class SyncAgentApp(ctk.CTk):
     def animate_button_icons(self):
         if not self.winfo_exists() or not self._animated_buttons:
             return
+        if time.time() < self._ui_motion_suspend_until:
+            self.after(BUTTON_ICON_ANIMATION_INTERVAL_MS, self.animate_button_icons)
+            return
         self._animated_button_index = (self._animated_button_index + 1) % 12
         frame_index = self._animated_button_index
         for button, frames in self._animated_buttons:
@@ -454,10 +464,13 @@ class SyncAgentApp(ctk.CTk):
                     button.configure(image=frames[frame_index % len(frames)])
             except Exception:
                 pass
-        self.after(88, self.animate_button_icons)
+        self.after(BUTTON_ICON_ANIMATION_INTERVAL_MS, self.animate_button_icons)
 
     def animate_hero_glow(self):
         if not self.winfo_exists() or not self._hero_glow_strip:
+            return
+        if time.time() < self._ui_motion_suspend_until:
+            self.after(HERO_GLOW_ANIMATION_INTERVAL_MS, self.animate_hero_glow)
             return
         wave = 0.5 + 0.5 * math.sin(self._hero_glow_phase)
         r = int(18 + (52 - 18) * wave)
@@ -474,7 +487,7 @@ class SyncAgentApp(ctk.CTk):
         except Exception:
             return
         self._hero_glow_phase += 0.08
-        self.after(90, self.animate_hero_glow)
+        self.after(HERO_GLOW_ANIMATION_INTERVAL_MS, self.animate_hero_glow)
 
     # ---------------------------
     # UI
@@ -798,8 +811,12 @@ class SyncAgentApp(ctk.CTk):
         self.create_progress_card()
         self.create_table_card()
         self.create_log_card()
-        self.animate_button_icons()
-        self.animate_hero_glow()
+        if ENABLE_BUTTON_ICON_ANIMATION:
+            self.animate_button_icons()
+        if ENABLE_HERO_GLOW_ANIMATION:
+            self.animate_hero_glow()
+        else:
+            self._hero_glow_strip.configure(fg_color=self.hero_glow)
 
     def create_hero_card(self):
         self.hero_card = ctk.CTkFrame(
@@ -979,6 +996,9 @@ class SyncAgentApp(ctk.CTk):
 
     def _on_window_configure(self, _event):
         self._ui_motion_suspend_until = time.time() + WINDOW_MOVE_PAUSE_SECONDS
+
+    def _on_mousewheel_activity(self, _event):
+        self._ui_motion_suspend_until = time.time() + WINDOW_SCROLL_PAUSE_SECONDS
 
 
 
