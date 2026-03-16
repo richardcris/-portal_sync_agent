@@ -13,5 +13,4 @@ python -m PyInstaller --clean --noconfirm --onefile --windowed ^
 --add-data "logo.png;." ^
 --add-data "1.png;." ^
 --add-data "icon.ico;." ^
---add-data "icon.png;." ^
 sync_agent.py
