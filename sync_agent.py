@@ -589,6 +589,15 @@ class SyncAgentApp(ctk.CTk):
         )
         self.app_name.pack(anchor="center", pady=(0, 2))
 
+        # Nome do desenvolvedor
+        self.dev_name = ctk.CTkLabel(
+            self.logo_wrap,
+            text="Desenvolvedor: RICHARD A",
+            font=ctk.CTkFont(family="Bahnschrift", size=13, weight="normal"),
+            text_color=self.text_soft
+        )
+        self.dev_name.pack(anchor="center", pady=(0, 6))
+
         self.app_subtitle = ctk.CTkLabel(
             self.logo_wrap,
             text="SYNC CORE . FISCAL NODE",
