@@ -1,0 +1,6 @@
+{
+  "latest_version": "1.0.1",
+  "download_url": "https://github.com/richardcris/-portal_sync_agent/releases/download/v1.0.1/VEXPER-SISTEMAS-Setup.exe",
+  "notes": "Correção da inicialização com Windows para iniciar o monitoramento automaticamente.",
+  "setup_sha256": "4182fbbaf545e3002bb6c80a82e8f730487a0f9bf5bff9f729ad49b125b285c6"
+}
